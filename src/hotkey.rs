@@ -28,7 +28,7 @@ impl HotkeyPattern {
     pub fn parse(s: &str) -> Result<Self> {
         let parts: Vec<&str> = s.split('+').collect();
         if parts.len() < 2 {
-            anyhow::bail!("invalid hotkey format: '{s}' — expected e.g. Win+N");
+            anyhow::bail!("invalid hotkey format: '{s}' — expected e.g. Ctrl+Win+N");
         }
         let mut modifiers = Vec::new();
         for part in parts.iter().take(parts.len() - 1) {

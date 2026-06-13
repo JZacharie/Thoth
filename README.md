@@ -7,11 +7,11 @@
 
 ## English
 
-**Thoth** is a lightweight Windows background application written in Rust that provides instant translation and grammar correction via a global hotkey (`Win+N`). It works in any application — select text, press the hotkey, and the selected text is replaced by its translated/corrected version.
+**Thoth** is a lightweight Windows background application written in Rust that provides instant translation and grammar correction via a global hotkey (`Ctrl+Win+N`). It works in any application — select text, press the hotkey, and the selected text is replaced by its translated/corrected version.
 
 ### Features
 
-- **Global Hotkey (`Win+N`)** — trigger from any text input field
+- **Global Hotkey (`Ctrl+Win+N`)** — trigger from any text input field
 - **Automatic Copy/Paste** — simulates `Ctrl+C` / `Ctrl+V` to grab and replace text
 - **LLM-powered Translation** — sends text to a local [Pylos](https://github.com/JZacharie/Pylos) gateway, which relays to any LLM (default: `gemma4:12b`)
 - **Model Fallback** — automatically retries with a secondary model if the primary fails
@@ -35,7 +35,7 @@ sequenceDiagram
     participant Pylos as Pylos Gateway (Port 3000)
     participant LLM as LLM (gemma4:12b)
 
-    User->>OS: Press Win+N
+    User->>OS: Press Ctrl+Win+N
     OS->>Thoth: Intercept hotkey (Keyboard Hook)
     Thoth->>OS: Simulate Ctrl+C (copy selection)
     OS->>Thoth: Return clipboard text
@@ -108,7 +108,7 @@ target_language = "fr"
 restore_clipboard = true
 show_notifications = true
 debounce_ms = 500
-hotkey = "Win+N"
+hotkey = "Ctrl+Win+N"
 ```
 
 Supported hotkey patterns: `Win`, `Ctrl`, `Alt`, `Shift` + letter (A-Z), number (0-9), `Space`, or `F1`-`F12`.
@@ -161,11 +161,11 @@ MIT — see [LICENSE](LICENSE).
 
 ## Français
 
-**Thoth** est une application système légère écrite en **Rust** pour **Windows**. Elle agit comme un assistant de traduction et correction instantané via un raccourci clavier global (`Win+N`). Sélectionnez du texte dans n'importe quelle application, appuyez sur le raccourci, et le texte est remplacé par sa version traduite/corrigée.
+**Thoth** est une application système légère écrite en **Rust** pour **Windows**. Elle agit comme un assistant de traduction et correction instantané via un raccourci clavier global (`Ctrl+Win+N`). Sélectionnez du texte dans n'importe quelle application, appuyez sur le raccourci, et le texte est remplacé par sa version traduite/corrigée.
 
 ### Fonctionnalités
 
-- **Raccourci Global (`Win+N`)** — déclenchement depuis n'importe quel champ de saisie
+- **Raccourci Global (`Ctrl+Win+N`)** — déclenchement depuis n'importe quel champ de saisie
 - **Copier/Coller Automatique** — simule `Ctrl+C` / `Ctrl+V` pour intercepter et remplacer le texte
 - **Traduction par LLM** — envoi à une passerelle [Pylos](https://github.com/JZacharie/Pylos) locale qui relaie vers le LLM (défaut : `gemma4:12b`)
 - **Modèle de Secours** — tentative automatique avec un second modèle si le principal échoue
@@ -189,7 +189,7 @@ sequenceDiagram
     participant Pylos as Passerelle Pylos (Port 3000)
     participant LLM as LLM (gemma4:12b)
 
-    Utilisateur->>OS: Appuie sur Win+N
+    Utilisateur->>OS: Appuie sur Ctrl+Win+N
     OS->>Thoth: Interception du raccourci
     Thoth->>OS: Simule Ctrl+C (copie sélection)
     OS->>Thoth: Retourne le texte du presse-papier
@@ -261,7 +261,7 @@ target_language = "fr"
 restore_clipboard = true
 show_notifications = true
 debounce_ms = 500
-hotkey = "Win+N"
+hotkey = "Ctrl+Win+N"
 ```
 
 Raccourcis supportés : `Win`, `Ctrl`, `Alt`, `Shift` + lettre (A-Z), chiffre (0-9), `Space`, ou `F1`-`F12`.

@@ -43,7 +43,7 @@ impl Default for BehaviorConfig {
             restore_clipboard: true,
             show_notifications: true,
             debounce_ms: 500,
-            hotkey: "Win+N".into(),
+            hotkey: "Ctrl+Win+N".into(),
         }
     }
 }
@@ -119,7 +119,7 @@ mod tests {
         assert!(cfg.show_notifications);
         assert!(cfg.restore_clipboard);
         assert_eq!(cfg.debounce_ms, 500);
-        assert_eq!(cfg.hotkey, "Win+N");
+        assert_eq!(cfg.hotkey, "Ctrl+Win+N");
     }
 
     #[test]
