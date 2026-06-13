@@ -82,12 +82,8 @@ mod platform {
 
         let status_item = MenuItem::new(s.status_enabled, true, None);
         let toggle_item = MenuItem::new(s.toggle_disable, true, None);
-        let auto_start_item = CheckMenuItem::new(
-            s.auto_start,
-            true,
-            auto_start::is_enabled(),
-            None,
-        );
+        let auto_start_item =
+            CheckMenuItem::new(s.auto_start, true, auto_start::is_enabled(), None);
         let config_item = MenuItem::new(s.config, true, None);
         let stats_item = MenuItem::new(s.stats, true, None);
         let reset_stats_item = MenuItem::new(s.reset_stats, true, None);
@@ -133,8 +129,16 @@ mod platform {
                         let new_state = !enabled.load(Ordering::Relaxed);
                         enabled.store(new_state, Ordering::Relaxed);
                         let s = menu_strings();
-                        toggle_item.set_text(if new_state { s.toggle_disable } else { s.toggle_enable });
-                        status_item.set_text(if new_state { s.status_enabled } else { s.status_disabled });
+                        toggle_item.set_text(if new_state {
+                            s.toggle_disable
+                        } else {
+                            s.toggle_enable
+                        });
+                        status_item.set_text(if new_state {
+                            s.status_enabled
+                        } else {
+                            s.status_disabled
+                        });
                     } else if event.id == auto_start_item.id() {
                         let new_state = !auto_start::is_enabled();
                         if new_state {
@@ -160,10 +164,14 @@ mod platform {
                             .join(", ");
                         let msg = format!(
                             "{}: {}\n{}: {}\n{}: {:.0} ms\n{}: {}",
-                            s.stats_translations, metrics.total_translations,
-                            s.stats_errors, metrics.total_errors,
-                            s.stats_latency, metrics.avg_latency_ms(),
-                            s.stats_models, models,
+                            s.stats_translations,
+                            metrics.total_translations,
+                            s.stats_errors,
+                            metrics.total_errors,
+                            s.stats_latency,
+                            metrics.avg_latency_ms(),
+                            s.stats_models,
+                            models,
                         );
                         tracing::info!("Stats:\n{}", msg);
                     } else if event.id == reset_stats_item.id() {
