@@ -205,9 +205,7 @@ mod platform {
                             return;
                         }
                         let key_ok = match &pat.key {
-                            HotkeyKey::Letter(ch) => {
-                                key_to_letter(&key) == Some(*ch)
-                            }
+                            HotkeyKey::Letter(ch) => key_to_letter(&key) == Some(*ch),
                             HotkeyKey::Number(n) => key_to_digit(&key) == Some(*n),
                             HotkeyKey::Space => matches!(key, Key::Space),
                             HotkeyKey::F(n) => key_to_f(&key) == Some(*n),
