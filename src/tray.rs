@@ -13,6 +13,9 @@ mod platform {
         Icon, TrayIconBuilder,
         menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, GetMessageW, MSG, PostQuitMessage, TranslateMessage,
+    };
 
     struct MenuStrings {
         status_enabled: &'static str,
@@ -116,15 +119,23 @@ mod platform {
 
         let mut shutdown_tx = Some(shutdown_tx);
 
-        loop {
-            match MenuEvent::receiver().recv() {
-                Ok(event) => {
+        unsafe {
+            let mut msg = std::mem::zeroed::<MSG>();
+            loop {
+                let result = GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0);
+                if result == 0 || result == -1 {
+                    break;
+                }
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+
+                while let Ok(event) = MenuEvent::receiver().try_recv() {
                     if event.id == quit_item.id() {
                         tracing::info!("tray: quit requested");
                         if let Some(tx) = shutdown_tx.take() {
                             let _ = tx.send(());
                         }
-                        break;
+                        PostQuitMessage(0);
                     } else if event.id == toggle_item.id() {
                         let new_state = !enabled.load(Ordering::Relaxed);
                         enabled.store(new_state, Ordering::Relaxed);
@@ -186,10 +197,6 @@ mod platform {
                             tracing::warn!("log file not found: {}", log_path.display());
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::error!("menu event error: {e:?}");
-                    break;
                 }
             }
         }
