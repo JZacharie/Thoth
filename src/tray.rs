@@ -14,27 +14,89 @@ mod platform {
         menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     };
 
+    struct MenuStrings {
+        status_enabled: &'static str,
+        status_disabled: &'static str,
+        toggle_disable: &'static str,
+        toggle_enable: &'static str,
+        auto_start: &'static str,
+        config: &'static str,
+        stats: &'static str,
+        reset_stats: &'static str,
+        stats_translations: &'static str,
+        stats_errors: &'static str,
+        stats_latency: &'static str,
+        stats_models: &'static str,
+        logs: &'static str,
+        quit: &'static str,
+        tooltip: &'static str,
+    }
+
+    fn menu_strings() -> MenuStrings {
+        let lang = sys_locale::get_locale()
+            .as_deref()
+            .and_then(|l| l.get(..2))
+            .unwrap_or("en");
+        match lang {
+            "fr" => MenuStrings {
+                status_enabled: "Thoth — Actif",
+                status_disabled: "Thoth — Désactivé",
+                toggle_disable: "Désactiver",
+                toggle_enable: "Activer",
+                auto_start: "Démarrer avec Windows",
+                config: "Configuration",
+                stats: "Statistiques",
+                reset_stats: "Réinitialiser les stats",
+                stats_translations: "Traductions",
+                stats_errors: "Erreurs",
+                stats_latency: "Latence moy.",
+                stats_models: "Modèles",
+                logs: "Journaux",
+                quit: "Quitter",
+                tooltip: "Thoth — Traducteur instantané",
+            },
+            _ => MenuStrings {
+                status_enabled: "Thoth — Enabled",
+                status_disabled: "Thoth — Disabled",
+                toggle_disable: "Disable",
+                toggle_enable: "Enable",
+                auto_start: "Start with Windows",
+                config: "Configuration",
+                stats: "Statistics",
+                reset_stats: "Reset statistics",
+                stats_translations: "Translations",
+                stats_errors: "Errors",
+                stats_latency: "Avg. latency",
+                stats_models: "Models",
+                logs: "Logs",
+                quit: "Quit",
+                tooltip: "Thoth — Instant translator",
+            },
+        }
+    }
+
     pub fn start(
         shutdown_tx: oneshot::Sender<()>,
         enabled: Arc<AtomicBool>,
         log_path: PathBuf,
         config_path: PathBuf,
     ) -> Result<()> {
+        let s = menu_strings();
         let menu = Menu::new();
 
-        let status_item = MenuItem::new("Thoth — Actif", true, None);
-        let toggle_item = MenuItem::new("Désactiver", true, None);
+        let status_item = MenuItem::new(s.status_enabled, true, None);
+        let toggle_item = MenuItem::new(s.toggle_disable, true, None);
         let auto_start_item = CheckMenuItem::new(
-            "Démarrer avec Windows",
+            s.auto_start,
             true,
             auto_start::is_enabled(),
             None,
         );
-        let config_item = MenuItem::new("Configuration", true, None);
-        let stats_item = MenuItem::new("Statistiques", true, None);
-        let reset_stats_item = MenuItem::new("Réinitialiser les stats", true, None);
-        let logs_item = MenuItem::new("Journaux", true, None);
-        let quit_item = MenuItem::new("Quitter", true, None);
+        let config_item = MenuItem::new(s.config, true, None);
+        let stats_item = MenuItem::new(s.stats, true, None);
+        let reset_stats_item = MenuItem::new(s.reset_stats, true, None);
+        let logs_item = MenuItem::new(s.logs, true, None);
+        let quit_item = MenuItem::new(s.quit, true, None);
 
         menu.append(&status_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
@@ -53,7 +115,7 @@ mod platform {
         let icon = Icon::from_resource(1, Some((32, 32))).ok();
 
         let mut builder = TrayIconBuilder::new()
-            .with_tooltip("Thoth — Traducteur instantané")
+            .with_tooltip(s.tooltip)
             .with_menu(Box::new(menu));
         if let Some(ico) = icon {
             builder = builder.with_icon(ico);
@@ -74,13 +136,9 @@ mod platform {
                     } else if event.id == toggle_item.id() {
                         let new_state = !enabled.load(Ordering::Relaxed);
                         enabled.store(new_state, Ordering::Relaxed);
-                        let label = if new_state { "Désactiver" } else { "Activer" };
-                        toggle_item.set_text(label);
-                        status_item.set_text(if new_state {
-                            "Thoth — Actif"
-                        } else {
-                            "Thoth — Désactivé"
-                        });
+                        let s = menu_strings();
+                        toggle_item.set_text(if new_state { s.toggle_disable } else { s.toggle_enable });
+                        status_item.set_text(if new_state { s.status_enabled } else { s.status_disabled });
                     } else if event.id == auto_start_item.id() {
                         let new_state = !auto_start::is_enabled();
                         if new_state {
@@ -96,18 +154,20 @@ mod platform {
                                 .spawn();
                         }
                     } else if event.id == stats_item.id() {
+                        let s = menu_strings();
                         let metrics = UsageMetrics::load();
+                        let models = metrics
+                            .model_usage
+                            .iter()
+                            .map(|(m, c)| format!("{m}: {c}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         let msg = format!(
-                            "Traductions : {}\nErreurs : {}\nLatence moy. : {:.0} ms\nModèles : {}",
-                            metrics.total_translations,
-                            metrics.total_errors,
-                            metrics.avg_latency_ms(),
-                            metrics
-                                .model_usage
-                                .iter()
-                                .map(|(m, c)| format!("{m}: {c}"))
-                                .collect::<Vec<_>>()
-                                .join(", "),
+                            "{}: {}\n{}: {}\n{}: {:.0} ms\n{}: {}",
+                            s.stats_translations, metrics.total_translations,
+                            s.stats_errors, metrics.total_errors,
+                            s.stats_latency, metrics.avg_latency_ms(),
+                            s.stats_models, models,
                         );
                         tracing::info!("Stats:\n{}", msg);
                     } else if event.id == reset_stats_item.id() {

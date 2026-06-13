@@ -31,6 +31,7 @@ winresource = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 rdev = "0.5"
+sys-locale = "0.3"
 notify-rust = "4"
 tray-icon = "0.24"
 winreg = "0.56"
