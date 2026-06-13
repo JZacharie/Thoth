@@ -190,8 +190,15 @@ mod platform {
                         tracing::info!("stats reset");
                     } else if event.id == logs_item.id() {
                         if log_path.exists() {
-                            let _ = std::process::Command::new("cmd")
-                                .args(["/c", "start", "", &log_path.to_string_lossy()])
+                            let _ = std::process::Command::new("powershell")
+                                .args([
+                                    "-NoProfile",
+                                    "-Command",
+                                    &format!(
+                                        "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Get-Content \\\"{}\\\" -Wait -Tail 50'",
+                                        log_path.to_string_lossy()
+                                    ),
+                                ])
                                 .spawn();
                         } else {
                             tracing::warn!("log file not found: {}", log_path.display());
