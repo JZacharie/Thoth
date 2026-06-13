@@ -8,16 +8,20 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
-fn log_path() -> PathBuf {
-    let base = std::env::var("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
-    base.join("thoth").join("thoth.log")
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let log_file = log_path();
+    let config = Config::load().unwrap_or_default();
+
+    let log_file = if let Some(ref path_str) = config.behavior.log_path {
+        PathBuf::from(path_str)
+    } else {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."));
+        exe_dir.join("thoth.log")
+    };
+
     if let Some(parent) = log_file.parent() {
         std::fs::create_dir_all(parent).ok();
     }
@@ -33,7 +37,6 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(non_blocking)
         .init();
 
-    let config = Config::load()?;
     tracing::info!("Thoth v{} starting", env!("CARGO_PKG_VERSION"));
 
     let mut config = config;

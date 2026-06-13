@@ -27,7 +27,7 @@ pub struct PylosConfig {
 impl Default for PylosConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://localhost:3000".into(),
+            endpoint: "https://pylos.p.zacharie.org".into(),
             model: "gemma4:12b".into(),
             fallback_model: Some("gemini4:12b".into()),
             timeout_secs: 10,
@@ -43,6 +43,8 @@ pub struct BehaviorConfig {
     pub show_notifications: bool,
     pub debounce_ms: u64,
     pub hotkey: String,
+    #[serde(default)]
+    pub log_path: Option<String>,
 }
 
 impl Default for BehaviorConfig {
@@ -52,7 +54,8 @@ impl Default for BehaviorConfig {
             restore_clipboard: true,
             show_notifications: true,
             debounce_ms: 500,
-            hotkey: "Ctrl+Win+N".into(),
+            hotkey: "Ctrl+Shift+Win+N".into(),
+            log_path: None,
         }
     }
 }
@@ -115,7 +118,7 @@ mod tests {
     #[test]
     fn test_pylos_default() {
         let cfg = PylosConfig::default();
-        assert_eq!(cfg.endpoint, "http://localhost:3000");
+        assert_eq!(cfg.endpoint, "https://pylos.p.zacharie.org");
         assert_eq!(cfg.model, "gemma4:12b");
         assert_eq!(cfg.fallback_model, Some("gemini4:12b".into()));
         assert_eq!(cfg.timeout_secs, 10);
@@ -129,7 +132,8 @@ mod tests {
         assert!(cfg.show_notifications);
         assert!(cfg.restore_clipboard);
         assert_eq!(cfg.debounce_ms, 500);
-        assert_eq!(cfg.hotkey, "Ctrl+Win+N");
+        assert_eq!(cfg.hotkey, "Ctrl+Shift+Win+N");
+        assert_eq!(cfg.log_path, None);
     }
 
     #[test]
