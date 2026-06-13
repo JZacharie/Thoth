@@ -46,9 +46,7 @@ impl UsageMetrics {
 
     pub fn save(&self) {
         let path = Self::path();
-        if let Some(parent) = path.parent()
-            && let Err(e) = std::fs::create_dir_all(parent)
-        {
+        if let Some(Err(e)) = path.parent().map(std::fs::create_dir_all) {
             tracing::warn!("failed to create metrics directory: {e}");
             return;
         }
