@@ -206,11 +206,11 @@ mod platform {
                         }
                         let key_ok = match &pat.key {
                             HotkeyKey::Letter(ch) => {
-                                key_to_letter(&key).map_or(false, |c| c == *ch)
+                                key_to_letter(&key) == Some(*ch)
                             }
-                            HotkeyKey::Number(n) => key_to_digit(&key).map_or(false, |d| d == *n),
+                            HotkeyKey::Number(n) => key_to_digit(&key) == Some(*n),
                             HotkeyKey::Space => matches!(key, Key::Space),
-                            HotkeyKey::F(n) => key_to_f(&key).map_or(false, |f| f == *n),
+                            HotkeyKey::F(n) => key_to_f(&key) == Some(*n),
                         };
                         if key_ok {
                             tracing::debug!("hotkey triggered");
