@@ -1,8 +1,8 @@
 [default]
 extend-ignore-identifiers-re = []
-ignore-dot = true
 
 [files]
+ignore-dot = true
 extend-exclude = [".git/"]
 
 [default.extend-words]
