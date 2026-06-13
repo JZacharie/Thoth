@@ -177,6 +177,9 @@ mod tests {
     #[test]
     fn test_system_language() {
         let lang = system_language();
-        assert!(validate_language(&lang), "system_language() returned '{lang}' which is not supported");
+        assert!(
+            validate_language(&lang),
+            "system_language() returned '{lang}' which is not supported"
+        );
     }
 }
