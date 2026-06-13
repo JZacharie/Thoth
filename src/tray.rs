@@ -10,7 +10,7 @@ mod platform {
     };
     use tokio::sync::oneshot;
     use tray_icon::{
-        TrayIconBuilder, Icon,
+        Icon, TrayIconBuilder,
         menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     };
 

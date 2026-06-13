@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::{Arc, Mutex, atomic::AtomicBool};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, atomic::AtomicBool};
 
 use thoth::config::Config;
 use thoth::hotkey::HotkeyPattern;
@@ -22,10 +22,8 @@ async fn main() -> anyhow::Result<()> {
         std::fs::create_dir_all(parent).ok();
     }
 
-    let file_appender = tracing_appender::rolling::never(
-        log_file.parent().unwrap(),
-        log_file.file_name().unwrap(),
-    );
+    let file_appender =
+        tracing_appender::rolling::never(log_file.parent().unwrap(), log_file.file_name().unwrap());
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::fmt()
