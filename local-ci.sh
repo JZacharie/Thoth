@@ -50,11 +50,37 @@ echo
 # --- Obligatoires (bloquants dans la pipeline) ---
 
 check "cargo fmt" cargo fmt --all --check
-check "cargo clippy" cargo clippy --workspace --all-targets
-check "cargo test" cargo test --workspace --all-features
+check "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
+
+if command -v cargo-nextest &>/dev/null; then
+    check "cargo nextest" cargo nextest run --workspace --no-fail-fast
+else
+    check "cargo test" cargo test --workspace --all-features
+fi
+
 check "cargo build --release" cargo build --release
 
-# --- Facultatifs (non bloquants dans la pipeline) ---
+# --- Outils de la CI (exécutés si installés en local) ---
+
+if command -v actionlint &>/dev/null; then
+    check "actionlint" actionlint
+else
+    echo -e "${YELLOW}⚠ actionlint non installé — saute (go install github.com/rhysd/actionlint/cmd/actionlint@latest)${NC}"
+fi
+
+if command -v typos &>/dev/null; then
+    check "typos" typos
+else
+    echo -e "${YELLOW}⚠ typos non installé — saute (cargo install typos-cli)${NC}"
+fi
+
+if command -v cargo-deny &>/dev/null; then
+    check "cargo deny" cargo deny check
+else
+    echo -e "${YELLOW}⚠ cargo-deny non installé — saute (cargo install --locked cargo-deny)${NC}"
+fi
+
+# --- Autres outils locaux ---
 
 if command -v cargo-outdated &>/dev/null; then
     check "cargo outdated" cargo outdated --exit-code 1
