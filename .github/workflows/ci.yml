@@ -166,7 +166,7 @@ jobs:
         run: dotnet tool install --global wix
 
       - name: Build MSI (WiX)
-        run: wix build ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
+        run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
@@ -198,7 +198,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          wix build ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
+          wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
