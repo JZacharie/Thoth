@@ -72,7 +72,17 @@ pub struct PylosClient {
 }
 
 impl PylosClient {
-    pub fn new(config: PylosConfig, target_language: String) -> Self {
+    pub fn new(mut config: PylosConfig, target_language: String) -> Self {
+        while config.endpoint.ends_with('/') {
+            config.endpoint.pop();
+        }
+        if config.endpoint.ends_with("/v1") {
+            config.endpoint.truncate(config.endpoint.len() - 3);
+        }
+        while config.endpoint.ends_with('/') {
+            config.endpoint.pop();
+        }
+
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
@@ -179,6 +189,30 @@ pub fn supported_languages() -> HashMap<&'static str, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_endpoint_sanitization() {
+        let cfg = PylosConfig {
+            endpoint: "https://pylos.p.zacharie.org/v1/".into(),
+            ..Default::default()
+        };
+        let client = PylosClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+
+        let cfg = PylosConfig {
+            endpoint: "https://pylos.p.zacharie.org/v1".into(),
+            ..Default::default()
+        };
+        let client = PylosClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+
+        let cfg = PylosConfig {
+            endpoint: "https://pylos.p.zacharie.org/".into(),
+            ..Default::default()
+        };
+        let client = PylosClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+    }
 
     #[test]
     fn test_language_name() {
