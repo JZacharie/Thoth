@@ -59,6 +59,13 @@ Write-Host "  $(Get-Date)" -ForegroundColor Yellow
 Write-Border
 Write-Host ""
 
+# Arrete l'executable s'il est en cours d'execution pour liberer le verrou sur thoth.exe
+if (Get-Process -Name thoth -ErrorAction SilentlyContinue) {
+    Write-Host "Arrêt de l'instance en cours de thoth.exe..." -ForegroundColor Yellow
+    Stop-Process -Name thoth -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+}
+
 # --- Obligatoires (bloquants dans la pipeline) ---
 
 Check-Command "cargo fmt" { cargo fmt --all --check }
