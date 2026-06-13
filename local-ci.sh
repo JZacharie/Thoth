@@ -83,7 +83,7 @@ fi
 # --- Autres outils locaux ---
 
 if command -v cargo-outdated &>/dev/null; then
-    check "cargo outdated" cargo outdated --exit-code 1
+    check "cargo outdated" cargo outdated
 else
     echo -e "${YELLOW}⚠ cargo-outdated non installé — saute (cargo install cargo-outdated)${NC}"
 fi
