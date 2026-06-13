@@ -18,6 +18,7 @@ thiserror = "2"
 regex = "1"
 tracing-appender = "0.2"
 time = "=0.3.36"
+sys-locale = "0.3"
 
 [package.metadata.cargo-udeps.ignore]
 development = []
@@ -31,7 +32,6 @@ winresource = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 rdev = "0.5"
-sys-locale = "0.3"
 notify-rust = "4"
 tray-icon = "0.24"
 winreg = "0.56"

@@ -33,11 +33,7 @@ mod platform {
     }
 
     fn menu_strings() -> MenuStrings {
-        let lang = sys_locale::get_locale()
-            .as_deref()
-            .and_then(|l| l.get(..2))
-            .unwrap_or("en");
-        match lang {
+        match crate::config::system_language().as_str() {
             "fr" => MenuStrings {
                 status_enabled: "Thoth — Actif",
                 status_disabled: "Thoth — Désactivé",

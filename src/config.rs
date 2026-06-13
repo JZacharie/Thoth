@@ -6,6 +6,15 @@ pub fn validate_language(code: &str) -> bool {
     SUPPORTED_LANGUAGES.contains(&code)
 }
 
+pub fn system_language() -> String {
+    sys_locale::get_locale()
+        .as_deref()
+        .and_then(|l| l.get(..2))
+        .filter(|l| SUPPORTED_LANGUAGES.contains(l))
+        .unwrap_or("en")
+        .to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PylosConfig {
     pub endpoint: String,
@@ -39,7 +48,7 @@ pub struct BehaviorConfig {
 impl Default for BehaviorConfig {
     fn default() -> Self {
         Self {
-            target_language: "fr".into(),
+            target_language: system_language(),
             restore_clipboard: true,
             show_notifications: true,
             debounce_ms: 500,
@@ -54,10 +63,10 @@ impl BehaviorConfig {
             &self.target_language
         } else {
             tracing::warn!(
-                "unsupported language '{}', falling back to 'fr'",
+                "unsupported language '{}', falling back to 'en'",
                 self.target_language
             );
-            "fr"
+            "en"
         }
     }
 }
@@ -115,7 +124,8 @@ mod tests {
     #[test]
     fn test_behavior_default() {
         let cfg = BehaviorConfig::default();
-        assert_eq!(cfg.target_language, "fr");
+        let sys = system_language();
+        assert_eq!(cfg.target_language, sys);
         assert!(cfg.show_notifications);
         assert!(cfg.restore_clipboard);
         assert_eq!(cfg.debounce_ms, 500);
@@ -125,8 +135,9 @@ mod tests {
     #[test]
     fn test_config_default() {
         let cfg = Config::default();
+        let sys = system_language();
         assert_eq!(cfg.pylos.model, "gemma4:12b");
-        assert_eq!(cfg.behavior.target_language, "fr");
+        assert_eq!(cfg.behavior.target_language, sys);
     }
 
     #[test]
@@ -160,6 +171,12 @@ mod tests {
             target_language: "zz".into(),
             ..Default::default()
         };
-        assert_eq!(cfg.validated_language(), "fr");
+        assert_eq!(cfg.validated_language(), "en");
+    }
+
+    #[test]
+    fn test_system_language() {
+        let lang = system_language();
+        assert!(validate_language(&lang), "system_language() returned '{lang}' which is not supported");
     }
 }
