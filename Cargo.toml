@@ -1,0 +1,40 @@
+[package]
+name = "thoth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+arboard = "3"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+notify = "7"
+toml = "0.8"
+thiserror = "2"
+regex = "1"
+tracing-error = "0.2"
+
+[dev-dependencies]
+wiremock = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+rdev = "0.5"
+notify-rust = "4"
+tray-icon = "0.20"
+winreg = "0.52"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[workspace]
