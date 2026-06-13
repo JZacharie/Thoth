@@ -3,17 +3,22 @@ mod platform {
     use crate::auto_start;
     use crate::metrics::UsageMetrics;
     use anyhow::Result;
+    use std::path::PathBuf;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
     use tokio::sync::oneshot;
     use tray_icon::{
-        TrayIconBuilder,
+        TrayIconBuilder, Icon,
         menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     };
 
-    pub fn start(shutdown_tx: oneshot::Sender<()>, enabled: Arc<AtomicBool>) -> Result<()> {
+    pub fn start(
+        shutdown_tx: oneshot::Sender<()>,
+        enabled: Arc<AtomicBool>,
+        log_path: PathBuf,
+    ) -> Result<()> {
         let menu = Menu::new();
 
         let status_item = MenuItem::new("Thoth — Actif", true, None);
@@ -26,6 +31,7 @@ mod platform {
         );
         let stats_item = MenuItem::new("Statistiques", true, None);
         let reset_stats_item = MenuItem::new("Réinitialiser les stats", true, None);
+        let logs_item = MenuItem::new("Journaux", true, None);
         let quit_item = MenuItem::new("Quitter", true, None);
 
         menu.append(&status_item)?;
@@ -36,12 +42,19 @@ mod platform {
         menu.append(&stats_item)?;
         menu.append(&reset_stats_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
+        menu.append(&logs_item)?;
+        menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit_item)?;
 
-        let _tray = TrayIconBuilder::new()
+        let icon = Icon::from_resource(1, Some((32, 32))).ok();
+
+        let mut builder = TrayIconBuilder::new()
             .with_tooltip("Thoth — Traducteur instantané")
-            .with_menu(Box::new(menu))
-            .build()?;
+            .with_menu(Box::new(menu));
+        if let Some(ico) = icon {
+            builder = builder.with_icon(ico);
+        }
+        let _tray = builder.build()?;
 
         let mut shutdown_tx = Some(shutdown_tx);
 
@@ -90,6 +103,14 @@ mod platform {
                     } else if event.id == reset_stats_item.id() {
                         UsageMetrics::default().save();
                         tracing::info!("stats reset");
+                    } else if event.id == logs_item.id() {
+                        if log_path.exists() {
+                            let _ = std::process::Command::new("cmd")
+                                .args(["/c", "start", "", &log_path.to_string_lossy()])
+                                .spawn();
+                        } else {
+                            tracing::warn!("log file not found: {}", log_path.display());
+                        }
                     }
                 }
                 Err(e) => {
@@ -106,10 +127,15 @@ mod platform {
 #[cfg(not(windows))]
 mod platform {
     use anyhow::Result;
+    use std::path::PathBuf;
     use std::sync::{Arc, atomic::AtomicBool};
     use tokio::sync::oneshot;
 
-    pub fn start(_shutdown_tx: oneshot::Sender<()>, _enabled: Arc<AtomicBool>) -> Result<()> {
+    pub fn start(
+        _shutdown_tx: oneshot::Sender<()>,
+        _enabled: Arc<AtomicBool>,
+        _log_path: PathBuf,
+    ) -> Result<()> {
         tracing::warn!("system tray not supported on this platform");
         Ok(())
     }
