@@ -45,40 +45,40 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - name: sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: check
           cache-on-failure: true
 
-      - name: Cache tools
-        id: cache-tools
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/bin/cargo-nextest
-            ~/.cargo/bin/cargo-deny
-          key: ${{ runner.os }}-tools-v1
-
       - name: Check formatting
         run: cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
 
       - name: Install cargo-nextest
-        if: steps.cache-tools.outputs.cache-hit != 'true'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
       - name: Run tests (nextest)
         run: cargo nextest run --workspace --no-fail-fast
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
 
       - name: Install cargo-deny
-        if: steps.cache-tools.outputs.cache-hit != 'true'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
+
       - name: Check licenses + advisories (cargo-deny)
         run: cargo deny check
 
@@ -89,16 +89,25 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
       - name: Install Rust (1.85.0)
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.0
+
+      - name: sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv
+
       - name: cargo check
         run: cargo check --workspace
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
 
   # ── Build release (binaire + MSI) ────────────────────────────
   build:
