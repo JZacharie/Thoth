@@ -53,7 +53,7 @@ jobs:
 
       - name: Cache tools
         id: cache-tools
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/cargo-nextest
