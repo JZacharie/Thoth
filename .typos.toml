@@ -1,0 +1,20 @@
+[default]
+extend-ignore-identifiers-re = []
+ignore-dot = true
+
+[files]
+extend-exclude = [".git/"]
+
+[default.extend-words]
+# Français — termes métier dans une appli francophone
+valide = "valide"
+Copie = "Copie"
+copie = "copie"
+Remplacement = "Remplacement"
+presse = "presse"
+Presse = "Presse"
+mis = "mis"
+sur = "sur"
+remplace = "remplace"
+cours = "cours"
+projet = "projet"
