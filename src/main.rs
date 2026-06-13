@@ -39,6 +39,20 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Thoth v{} starting", env!("CARGO_PKG_VERSION"));
 
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Get-Content \\\"{}\\\" -Wait -Tail 50'",
+                    log_file.to_string_lossy()
+                ),
+            ])
+            .spawn();
+    }
+
     let mut config = config;
     if config.pylos.secret.is_empty() {
         config.pylos.secret = uuid_v4();
