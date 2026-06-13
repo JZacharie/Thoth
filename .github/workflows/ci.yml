@@ -175,9 +175,9 @@ jobs:
           path: ./Thoth-nightly.msi
           compression-level: 0
 
-  # ── Signature (tags uniquement) ──────────────────────────────
-  sign:
-    name: Sign Binary
+  # ── MSI signé (tags uniquement) ─────────────────────────────
+  msi-release:
+    name: Build MSI (Release)
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
@@ -189,40 +189,6 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64
-          path: ./release
-
-      - name: Sign binary (Authenticode)
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-        shell: pwsh
-        run: |
-          echo "$env:CERTIFICATE_BASE64" | base64 --decode > cert.pfx
-          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign `
-            /fd SHA256 /f cert.pfx /p "$env:CERTIFICATE_PASSWORD" `
-            /tr http://timestamp.digicert.com /td SHA256 /v ./release/thoth.exe
-
-      - name: Upload signed binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: thoth-windows-x86_64-signed
-          path: ./release/thoth.exe
-          compression-level: 0
-
-  # ── MSI signé (tags uniquement) ─────────────────────────────
-  msi-release:
-    name: Build MSI (Release)
-    needs: [build, sign]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download signed binary
-        uses: actions/download-artifact@v8
-        with:
-          name: thoth-windows-x86_64-signed
           path: ./release
 
       - name: Install WiX CLI
@@ -244,7 +210,7 @@ jobs:
   # ── GitHub Release (tags uniquement) ─────────────────────────
   release:
     name: Publish Release
-    needs: [build, sign, msi-release]
+    needs: [build, msi-release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -253,10 +219,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download signed binary
+      - name: Download build artifact
         uses: actions/download-artifact@v8
         with:
-          name: thoth-windows-x86_64-signed
+          name: thoth-windows-x86_64
           path: ./release
 
       - name: Download release MSI
