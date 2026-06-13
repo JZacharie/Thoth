@@ -9,6 +9,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_DEFAULT: sparse
+  shared-key: thoth
 
 jobs:
   check:
@@ -22,8 +24,17 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Cache Cargo
+      - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.shared-key }}
+          cache-on-failure: true
+
+      - name: Cache installed tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-outdated
+          key: ${{ runner.os }}-tools-v1
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -34,17 +45,19 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+      - name: Install cargo-outdated
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: cargo install cargo-outdated --locked
       - name: Check for outdated crates
         continue-on-error: true
-        run: |
-          cargo install cargo-outdated
-          cargo outdated --exit-code 1
+        run: cargo outdated --exit-code 1
 
+      - name: Install cargo-audit
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
       - name: Audit security vulnerabilities
         continue-on-error: true
-        run: |
-          cargo install cargo-audit
-          cargo audit
+        run: cargo audit
 
   build:
     name: Build Release
@@ -59,8 +72,11 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache Cargo
+      # shared-key identique à check → partage le cache registry/target
+      - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.shared-key }}
 
       - name: Build release binary
         run: cargo build --release --target x86_64-pc-windows-msvc
@@ -85,6 +101,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Cargo (registry only, sign ne compile pas)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.shared-key }}
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
