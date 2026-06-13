@@ -162,12 +162,11 @@ jobs:
           name: thoth-windows-x86_64
           path: ./release
 
+      - name: Install WiX CLI
+        run: dotnet tool install --global wix
+
       - name: Build MSI (WiX)
-        uses: wixtoolset/actions-wix@v1
-        with:
-          source: ./installer/Thoth.wxs
-          output: ./Thoth-nightly.msi
-          variables: "ThothBinary=./release/thoth.exe"
+        run: wix build ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
@@ -226,12 +225,14 @@ jobs:
           name: thoth-windows-x86_64-signed
           path: ./release
 
+      - name: Install WiX CLI
+        run: dotnet tool install --global wix
+
       - name: Build MSI (WiX)
-        uses: wixtoolset/actions-wix@v1
-        with:
-          source: ./installer/Thoth.wxs
-          output: ./Thoth-${{ github.ref_name }}.msi
-          variables: "ThothBinary=./release/thoth.exe"
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          wix build ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
