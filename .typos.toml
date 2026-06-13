@@ -8,11 +8,9 @@ extend-exclude = [".git/"]
 [default.extend-words]
 # Français — termes métier dans une appli francophone
 valide = "valide"
-Copie = "Copie"
 copie = "copie"
-Remplacement = "Remplacement"
+remplacement = "remplacement"
 presse = "presse"
-Presse = "Presse"
 mis = "mis"
 sur = "sur"
 remplace = "remplace"
