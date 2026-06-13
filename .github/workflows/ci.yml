@@ -53,7 +53,7 @@ jobs:
 
       - name: Cache tools
         id: cache-tools
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/cargo-nextest
@@ -90,7 +90,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust (1.85.0)
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -113,7 +115,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
       - name: Cache Cargo (registry)
         uses: Swatinem/rust-cache@v2
         with:
