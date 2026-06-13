@@ -7,19 +7,40 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_REGISTRY_DEFAULT: sparse
-  shared-key: thoth
 
 jobs:
-  check:
-    name: Check & Test
-    runs-on: windows-latest
+  # ── Pre-checks rapides (pas de compilation Rust) ──────────────
+  lint:
+    name: Lint (actionlint + typos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          fail_on_error: true
+
+      - name: typos
+        uses: crate-ci/typos@master
+
+  # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
+  check:
+    name: Check & Test
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -27,13 +48,16 @@ jobs:
       - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ${{ env.shared-key }}
+          shared-key: check
           cache-on-failure: true
 
-      - name: Cache installed tools
+      - name: Cache tools
+        id: cache-tools
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin/cargo-outdated
+          path: |
+            ~/.cargo/bin/cargo-nextest
+            ~/.cargo/bin/cargo-deny
           key: ${{ runner.os }}-tools-v1
 
       - name: Check formatting
@@ -42,45 +66,64 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Run tests
-        run: cargo test --workspace
-
-      - name: Install cargo-outdated
+      - name: Install cargo-nextest
         if: steps.cache-tools.outputs.cache-hit != 'true'
-        run: cargo install cargo-outdated --locked
-      - name: Check for outdated crates
-        continue-on-error: true
-        run: cargo outdated --exit-code 1
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run tests (nextest)
+        run: cargo nextest run --workspace --no-fail-fast
 
-      - name: Install cargo-audit
+      - name: Install cargo-deny
         if: steps.cache-tools.outputs.cache-hit != 'true'
-        run: cargo install cargo-audit --locked
-      - name: Audit security vulnerabilities
-        continue-on-error: true
-        run: cargo audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Check licenses + advisories (cargo-deny)
+        run: cargo deny check
 
+  # ── Vérification MSRV ────────────────────────────────────────
+  msrv:
+    name: MSRV (1.85.0)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust (1.85.0)
+        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv
+      - name: cargo check
+        run: cargo check --workspace
+
+  # ── Build release (binaire + MSI) ────────────────────────────
   build:
     name: Build Release
-    needs: [check]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [lint, check, msrv]
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
 
-      # shared-key identique à check → partage le cache registry/target
-      - name: Cache Cargo (registry + target)
+      - name: sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Cache Cargo (registry)
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ${{ env.shared-key }}
+          shared-key: build
 
       - name: Build release binary
         run: cargo build --release --target x86_64-pc-windows-msvc
         env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
           RUSTFLAGS: "-C target-feature=+crt-static -C lto=yes -C codegen-units=1 -C opt-level=z"
 
       - name: Strip binary
@@ -94,18 +137,15 @@ jobs:
           path: target/x86_64-pc-windows-msvc/release/thoth.exe
           compression-level: 0
 
-  sign:
-    name: Sign Binary
+  # ── MSI (chaque push sur main, pas besoin de signature) ──────
+  msi:
+    name: Build MSI
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cache Cargo (registry only, sign ne compile pas)
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{ env.shared-key }}
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -113,7 +153,37 @@ jobs:
           name: thoth-windows-x86_64
           path: ./release
 
-      - name: Sign binary
+      - name: Build MSI (WiX)
+        uses: wixtoolset/actions-wix@v1
+        with:
+          source: ./installer/Thoth.wxs
+          output: ./Thoth-nightly.msi
+          variables: "ThothBinary=./release/thoth.exe"
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: thoth-msi
+          path: ./Thoth-nightly.msi
+          compression-level: 0
+
+  # ── Signature (tags uniquement) ──────────────────────────────
+  sign:
+    name: Sign Binary
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: thoth-windows-x86_64
+          path: ./release
+
+      - name: Sign binary (Authenticode)
         env:
           CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
@@ -127,26 +197,27 @@ jobs:
       - name: Upload signed binary
         uses: actions/upload-artifact@v4
         with:
-          name: thoth-windows-x86_64
+          name: thoth-windows-x86_64-signed
           path: ./release/thoth.exe
           compression-level: 0
-          overwrite: true
 
-  msi:
-    name: Build MSI
+  # ── MSI signé (tags uniquement) ─────────────────────────────
+  msi-release:
+    name: Build MSI (Release)
     needs: [build, sign]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Download signed binary
         uses: actions/download-artifact@v4
         with:
-          name: thoth-windows-x86_64
+          name: thoth-windows-x86_64-signed
           path: ./release
 
-      - name: Build MSI
+      - name: Build MSI (WiX)
         uses: wixtoolset/actions-wix@v1
         with:
           source: ./installer/Thoth.wxs
@@ -156,37 +227,39 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: thoth-windows-x86_64
-          path: ./Thoth-*.msi
+          name: thoth-msi-release
+          path: ./Thoth-${{ github.ref_name }}.msi
           compression-level: 0
 
+  # ── GitHub Release (tags uniquement) ─────────────────────────
   release:
     name: Publish Release
-    needs: [build, sign, msi]
+    needs: [build, sign, msi-release]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download signed binary
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          name: thoth-windows-x86_64-signed
+          path: ./release
+
+      - name: Download release MSI
+        uses: actions/download-artifact@v4
+        with:
+          name: thoth-msi-release
+          path: ./release
 
       - name: Prepare release assets
         shell: pwsh
         run: |
-          Copy-Item ./artifacts/thoth-windows-x86_64/thoth.exe ./release/thoth.exe
           certutil -hashfile ./release/thoth.exe SHA256 > ./release/thoth.exe.sha256
           Compress-Archive -Path ./release/thoth.exe, ./release/thoth.exe.sha256 -DestinationPath thoth-windows-x86_64.zip
-
-      - name: Collect MSI
-        shell: pwsh
-        run: |
-          $msi = Get-ChildItem ./artifacts -Filter "*.msi" | Select-Object -First 1
-          if ($msi) { Copy-Item $msi.FullName ./release/ }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -195,7 +268,7 @@ jobs:
             thoth-windows-x86_64.zip
             ./release/thoth.exe
             ./release/thoth.exe.sha256
-            ./release/*.msi
+            ./release/Thoth-*.msi
           generate_release_notes: true
           draft: false
           prerelease: false
