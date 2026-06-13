@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64
           path: ./release
@@ -178,7 +178,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64
           path: ./release
@@ -212,7 +212,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download signed binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64-signed
           path: ./release
@@ -244,13 +244,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download signed binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64-signed
           path: ./release
 
       - name: Download release MSI
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: thoth-msi-release
           path: ./release
