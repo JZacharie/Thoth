@@ -1,0 +1,52 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Package
+        Name="Thoth"
+        Manufacturer="Pylos"
+        Version="$(version)"
+        UpgradeCode="01234567-89AB-CDEF-0123-456789ABCDEF"
+        Scope="perMachine">
+
+        <MajorUpgrade
+            DowngradeErrorMessage="A newer version of Thoth is already installed."
+            Schedule="afterInstallInitialize" />
+
+        <!-- Installation directory: ProgramFiles64Folder\Thoth\ -->
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLDIR" Name="Thoth">
+                <Component Id="ThothBinary" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+                    <File Id="ThothExe" Name="thoth.exe" Source="$(var.ThothBinary)" Vital="yes" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+
+        <!-- Start menu shortcut -->
+        <StandardDirectory Id="ProgramMenuFolder">
+            <Directory Id="ApplicationProgramsFolder" Name="Thoth">
+                <Component Id="StartMenuShortcut" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+                    <Shortcut
+                        Id="ThothStartMenu"
+                        Name="Thoth"
+                        Description="Instant translation & grammar correction"
+                        Target="[INSTALLDIR]thoth.exe"
+                        WorkingDirectory="INSTALLDIR" />
+                    <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+                    <RegistryValue Root="HKCU" Key="Software\Pylos\Thoth" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+
+        <!-- Registry for Add/Remove Programs -->
+        <Component Id="RegistryEntries" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+            <RegistryKey Root="HKLM" Key="Software\Pylos\Thoth">
+                <RegistryValue Name="version" Type="string" Value="$(version)" />
+                <RegistryValue Name="install_dir" Type="string" Value="[INSTALLDIR]" />
+            </RegistryKey>
+        </Component>
+
+        <Feature Id="MainFeature" Title="Thoth" Level="1">
+            <ComponentRef Id="ThothBinary" />
+            <ComponentRef Id="StartMenuShortcut" />
+            <ComponentRef Id="RegistryEntries" />
+        </Feature>
+    </Package>
+</Wix>

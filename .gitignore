@@ -1,0 +1,44 @@
+# Rust compilation artifacts
+target/
+**/*.rs.bk
+
+# Environment files (Pylos endpoint, secrets, local config)
+.env
+.env.*
+!.env.example
+*.env.local
+*.env.development
+*.env.production
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Config with local overrides (user-specific)
+config.local.toml
+config.local.yaml
+config.local.json
+
+# Crash reports / logs
+crash-reports/
+logs/
+
+# MSI installer output
+*.msi
+*.wixobj
+*.wixpdb
+
+# Release artifacts
+release/
+
+
+# Added by cargo
+
+/target
