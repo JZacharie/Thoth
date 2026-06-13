@@ -17,6 +17,7 @@ toml = "1.1"
 thiserror = "2"
 regex = "1"
 tracing-appender = "0.2"
+time = "=0.3.36"
 
 [package.metadata.cargo-udeps.ignore]
 development = []

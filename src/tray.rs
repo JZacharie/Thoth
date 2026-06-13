@@ -18,6 +18,7 @@ mod platform {
         shutdown_tx: oneshot::Sender<()>,
         enabled: Arc<AtomicBool>,
         log_path: PathBuf,
+        config_path: PathBuf,
     ) -> Result<()> {
         let menu = Menu::new();
 
@@ -29,6 +30,7 @@ mod platform {
             auto_start::is_enabled(),
             None,
         );
+        let config_item = MenuItem::new("Configuration", true, None);
         let stats_item = MenuItem::new("Statistiques", true, None);
         let reset_stats_item = MenuItem::new("Réinitialiser les stats", true, None);
         let logs_item = MenuItem::new("Journaux", true, None);
@@ -38,6 +40,8 @@ mod platform {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&toggle_item)?;
         menu.append(&auto_start_item)?;
+        menu.append(&PredefinedMenuItem::separator())?;
+        menu.append(&config_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&stats_item)?;
         menu.append(&reset_stats_item)?;
@@ -85,6 +89,12 @@ mod platform {
                             let _ = auto_start::disable();
                         }
                         auto_start_item.set_checked(new_state);
+                    } else if event.id == config_item.id() {
+                        if config_path.exists() {
+                            let _ = std::process::Command::new("cmd")
+                                .args(["/c", "start", "", &config_path.to_string_lossy()])
+                                .spawn();
+                        }
                     } else if event.id == stats_item.id() {
                         let metrics = UsageMetrics::load();
                         let msg = format!(
@@ -135,6 +145,7 @@ mod platform {
         _shutdown_tx: oneshot::Sender<()>,
         _enabled: Arc<AtomicBool>,
         _log_path: PathBuf,
+        _config_path: PathBuf,
     ) -> Result<()> {
         tracing::warn!("system tray not supported on this platform");
         Ok(())

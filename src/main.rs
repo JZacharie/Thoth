@@ -51,9 +51,10 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
+    let config_path = Config::path();
     let tray_enabled = enabled.clone();
     let _tray = std::thread::spawn(move || {
-        if let Err(e) = thoth::tray::start(shutdown_tx, tray_enabled, log_file) {
+        if let Err(e) = thoth::tray::start(shutdown_tx, tray_enabled, log_file, config_path) {
             tracing::error!("tray error: {e}");
         }
     });
