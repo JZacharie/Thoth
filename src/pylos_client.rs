@@ -94,8 +94,8 @@ impl PylosClient {
         }
     }
 
-    fn build_prompt(&self) -> String {
-        let lang = language_name(&self.target_language);
+    fn build_prompt(&self, target_lang: &str) -> String {
+        let lang = language_name(target_lang);
         format!(
             "Tu es un traducteur et correcteur de texte ultra-précis.\n\
              Ta tâche est de traduire, corriger l'orthographe/grammaire et rendre le texte fourni clair et concis.\n\
@@ -107,13 +107,18 @@ impl PylosClient {
         )
     }
 
-    async fn translate_with_model(&self, text: &str, model: &str) -> Result<String> {
+    async fn translate_with_model(
+        &self,
+        text: &str,
+        model: &str,
+        target_lang: &str,
+    ) -> Result<String> {
         let request = ChatRequest {
             model: model.into(),
             messages: vec![
                 Message {
                     role: "system".into(),
-                    content: self.build_prompt(),
+                    content: self.build_prompt(target_lang),
                 },
                 Message {
                     role: "user".into(),
@@ -146,26 +151,123 @@ impl PylosClient {
         self.config.model.clone()
     }
 
-    pub async fn translate(&self, text: &str) -> Result<String> {
-        let result = self.translate_with_model(text, &self.config.model).await;
+    pub fn endpoint(&self) -> &str {
+        &self.config.endpoint
+    }
+
+    pub async fn test_connection(&self) -> Result<()> {
+        let url = format!("{}/v1/models", self.config.endpoint);
+        let _ = self
+            .client
+            .get(&url)
+            .header("X-Thoth-Secret", &self.config.secret)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
+    fn build_instruction_prompt(&self) -> String {
+        "Tu es un assistant personnel intelligent et ultra-précis.\n\
+         Analyse le texte fourni, identifie la consigne ou l'action demandée (par exemple : résumer, expliquer, répondre à un e-mail, reformuler, etc.) et exécute-la directement sur le reste du texte.\n\
+         Génère UNIQUEMENT la réponse ou le résultat final attendu.\n\
+         Ne commence JAMAIS ta réponse par des formules de politesse, des introductions ou des explications sur ce que tu fais.\n\
+         Ne mets pas de guillemets ou de blocs de code markdown autour de ta réponse, sauf si la consigne demande explicitement un format spécifique.".to_string()
+    }
+
+    pub async fn execute_instruction(&self, text: &str) -> Result<String> {
+        let system_prompt = self.build_instruction_prompt();
+        let request = ChatRequest {
+            model: self.config.model.clone(),
+            messages: vec![
+                Message {
+                    role: "system".into(),
+                    content: system_prompt.clone(),
+                },
+                Message {
+                    role: "user".into(),
+                    content: text.into(),
+                },
+            ],
+        };
+
+        let result = self
+            .client
+            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
+            .json(&request)
+            .send()
+            .await?
+            .error_for_status();
+
+        let response = match result {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!("primary model failed on instruction: {e}, trying fallback");
+                match &self.config.fallback_model {
+                    Some(fallback) => {
+                        let request_fallback = ChatRequest {
+                            model: fallback.clone(),
+                            messages: vec![
+                                Message {
+                                    role: "system".into(),
+                                    content: system_prompt,
+                                },
+                                Message {
+                                    role: "user".into(),
+                                    content: text.into(),
+                                },
+                            ],
+                        };
+                        self.client
+                            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+                            .header("X-Thoth-Secret", &self.config.secret)
+                            .json(&request_fallback)
+                            .send()
+                            .await?
+                            .error_for_status()?
+                    }
+                    None => return Err(e.into()),
+                }
+            }
+        };
+
+        let body: ChatResponse = response.json().await?;
+        let content = body
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default();
+
+        Ok(content)
+    }
+
+    pub async fn translate_to(&self, text: &str, target_lang: &str) -> Result<String> {
+        let result = self
+            .translate_with_model(text, &self.config.model, target_lang)
+            .await;
 
         match result {
             Ok(content) => Ok(content),
             Err(e) => {
                 tracing::warn!("primary model failed: {e}, trying fallback");
                 match &self.config.fallback_model {
-                    Some(fallback) => {
-                        self.translate_with_model(text, fallback)
-                            .await
-                            .map_err(|e2| {
-                                tracing::error!("fallback model also failed: {e2}");
-                                anyhow::anyhow!("both models failed — primary: {e}, fallback: {e2}")
-                            })
-                    }
+                    Some(fallback) => self
+                        .translate_with_model(text, fallback, target_lang)
+                        .await
+                        .map_err(|e2| {
+                            tracing::error!("fallback model also failed: {e2}");
+                            anyhow::anyhow!("both models failed — primary: {e}, fallback: {e2}")
+                        }),
                     None => Err(e),
                 }
             }
         }
+    }
+
+    pub async fn translate(&self, text: &str) -> Result<String> {
+        self.translate_to(text, &self.target_language).await
     }
 }
 

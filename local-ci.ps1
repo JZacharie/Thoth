@@ -59,12 +59,10 @@ Write-Host "  $(Get-Date)" -ForegroundColor Yellow
 Write-Border
 Write-Host ""
 
-# Arrete l'executable s'il est en cours d'execution pour liberer le verrou sur thoth.exe
-if (Get-Process -Name thoth -ErrorAction SilentlyContinue) {
-    Write-Host "Arrêt de l'instance en cours de thoth.exe..." -ForegroundColor Yellow
-    Stop-Process -Name thoth -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 1
-}
+# Arrete toutes les instances en cours de thoth.exe pour liberer le verrou sur le binaire
+Write-Host "Arrêt de toutes les instances de thoth.exe..." -ForegroundColor Yellow
+taskkill /F /IM thoth.exe 2>$null
+Start-Sleep -Seconds 1
 
 # --- Obligatoires (bloquants dans la pipeline) ---
 

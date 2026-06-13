@@ -10,12 +10,21 @@ pub enum Modifier {
     Shift,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HotkeyAction {
+    TranslateDefault,
+    TranslateEnglish,
+    ExecuteInstruction,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum HotkeyKey {
     Letter(char),
     Number(u8),
     Space,
     F(u8),
+    Comma,
+    Semicolon,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,6 +59,8 @@ impl HotkeyPattern {
             } else {
                 match key_str.to_lowercase().as_str() {
                     "space" => HotkeyKey::Space,
+                    "comma" | "," => HotkeyKey::Comma,
+                    "semicolon" | ";" => HotkeyKey::Semicolon,
                     s if s.starts_with('f') && s[1..].parse::<u8>().is_ok() => {
                         HotkeyKey::F(s[1..].parse().unwrap())
                     }
@@ -73,156 +84,119 @@ impl HotkeyPattern {
 #[cfg(windows)]
 mod platform {
     use anyhow::Result;
-    use rdev::{Event, EventType, Key, listen};
     use std::sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     };
     use tokio::sync::mpsc;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, GetMessageW, MSG, TranslateMessage, WM_HOTKEY,
+    };
 
     use super::{HotkeyKey, HotkeyPattern, Modifier};
 
-    fn key_to_letter(key: &Key) -> Option<char> {
-        match key {
-            Key::KeyA => Some('a'),
-            Key::KeyB => Some('b'),
-            Key::KeyC => Some('c'),
-            Key::KeyD => Some('d'),
-            Key::KeyE => Some('e'),
-            Key::KeyF => Some('f'),
-            Key::KeyG => Some('g'),
-            Key::KeyH => Some('h'),
-            Key::KeyI => Some('i'),
-            Key::KeyJ => Some('j'),
-            Key::KeyK => Some('k'),
-            Key::KeyL => Some('l'),
-            Key::KeyM => Some('m'),
-            Key::KeyN => Some('n'),
-            Key::KeyO => Some('o'),
-            Key::KeyP => Some('p'),
-            Key::KeyQ => Some('q'),
-            Key::KeyR => Some('r'),
-            Key::KeyS => Some('s'),
-            Key::KeyT => Some('t'),
-            Key::KeyU => Some('u'),
-            Key::KeyV => Some('v'),
-            Key::KeyW => Some('w'),
-            Key::KeyX => Some('x'),
-            Key::KeyY => Some('y'),
-            Key::KeyZ => Some('z'),
-            _ => None,
+    fn get_win32_modifiers(modifiers: &[Modifier]) -> u32 {
+        let mut m = 0;
+        for modifier in modifiers {
+            match modifier {
+                Modifier::Alt => m |= 0x0001,
+                Modifier::Ctrl => m |= 0x0002,
+                Modifier::Shift => m |= 0x0004,
+                Modifier::Win => m |= 0x0008,
+            }
         }
+        m
     }
 
-    fn key_to_digit(key: &Key) -> Option<u8> {
+    fn get_win32_vk(key: &HotkeyKey) -> u32 {
         match key {
-            Key::Num0 => Some(0),
-            Key::Num1 => Some(1),
-            Key::Num2 => Some(2),
-            Key::Num3 => Some(3),
-            Key::Num4 => Some(4),
-            Key::Num5 => Some(5),
-            Key::Num6 => Some(6),
-            Key::Num7 => Some(7),
-            Key::Num8 => Some(8),
-            Key::Num9 => Some(9),
-            _ => None,
-        }
-    }
-
-    fn key_to_f(key: &Key) -> Option<u8> {
-        match key {
-            Key::F1 => Some(1),
-            Key::F2 => Some(2),
-            Key::F3 => Some(3),
-            Key::F4 => Some(4),
-            Key::F5 => Some(5),
-            Key::F6 => Some(6),
-            Key::F7 => Some(7),
-            Key::F8 => Some(8),
-            Key::F9 => Some(9),
-            Key::F10 => Some(10),
-            Key::F11 => Some(11),
-            Key::F12 => Some(12),
-            _ => None,
+            HotkeyKey::Letter(ch) => ch.to_ascii_uppercase() as u32,
+            HotkeyKey::Number(n) => (*n as u32) + 0x30,
+            HotkeyKey::Space => 0x20,
+            HotkeyKey::F(n) => 0x70 + (*n as u32 - 1),
+            HotkeyKey::Comma => 0xBC,
+            HotkeyKey::Semicolon => 0xBA,
         }
     }
 
     pub fn start(
-        tx: mpsc::Sender<()>,
+        tx: mpsc::Sender<super::HotkeyAction>,
         pattern: Arc<Mutex<HotkeyPattern>>,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
-        std::thread::spawn(move || {
-            let mut ctrl_pressed = false;
-            let mut alt_pressed = false;
-            let mut shift_pressed = false;
-            let mut meta_pressed = false;
+        let pat_default = pattern.lock().unwrap().clone();
+        let fs_default = get_win32_modifiers(&pat_default.modifiers);
+        let vk_default = get_win32_vk(&pat_default.key);
 
-            let callback = move |event: Event| {
-                if !enabled.load(Ordering::Relaxed) {
+        let pat_english = HotkeyPattern::parse("Ctrl+Shift+Win+,").unwrap();
+        let fs_english = get_win32_modifiers(&pat_english.modifiers);
+        let vk_english = get_win32_vk(&pat_english.key);
+
+        let pat_instruction = HotkeyPattern::parse("Ctrl+Shift+Win+;").unwrap();
+        let fs_instruction = get_win32_modifiers(&pat_instruction.modifiers);
+        let vk_instruction = get_win32_vk(&pat_instruction.key);
+
+        std::thread::spawn(move || {
+            unsafe extern "system" {
+                fn RegisterHotKey(
+                    hwnd: *mut std::ffi::c_void,
+                    id: i32,
+                    fs_modifiers: u32,
+                    vk: u32,
+                ) -> i32;
+                fn UnregisterHotKey(hwnd: *mut std::ffi::c_void, id: i32) -> i32;
+                fn GetLastError() -> u32;
+            }
+
+            unsafe {
+                // MOD_NOREPEAT = 0x4000
+                if RegisterHotKey(std::ptr::null_mut(), 1, fs_default | 0x4000, vk_default) == 0 {
+                    let err = GetLastError();
+                    tracing::error!("RegisterHotKey (Default) failed with error code: {err}");
                     return;
                 }
-
-                match event.event_type {
-                    EventType::KeyPress(Key::ControlLeft)
-                    | EventType::KeyPress(Key::ControlRight) => {
-                        ctrl_pressed = true;
-                    }
-                    EventType::KeyRelease(Key::ControlLeft)
-                    | EventType::KeyRelease(Key::ControlRight) => {
-                        ctrl_pressed = false;
-                    }
-                    EventType::KeyPress(Key::Alt) => {
-                        alt_pressed = true;
-                    }
-                    EventType::KeyRelease(Key::Alt) => {
-                        alt_pressed = false;
-                    }
-                    EventType::KeyPress(Key::ShiftLeft) | EventType::KeyPress(Key::ShiftRight) => {
-                        shift_pressed = true;
-                    }
-                    EventType::KeyRelease(Key::ShiftLeft)
-                    | EventType::KeyRelease(Key::ShiftRight) => {
-                        shift_pressed = false;
-                    }
-                    EventType::KeyPress(Key::MetaLeft) | EventType::KeyPress(Key::MetaRight) => {
-                        meta_pressed = true;
-                    }
-                    EventType::KeyRelease(Key::MetaLeft)
-                    | EventType::KeyRelease(Key::MetaRight) => {
-                        meta_pressed = false;
-                    }
-                    EventType::KeyPress(key) => {
-                        let pat = pattern.lock().unwrap();
-                        let mods_ok = pat.modifiers.iter().all(|m| match m {
-                            Modifier::Win => meta_pressed,
-                            Modifier::Ctrl => ctrl_pressed,
-                            Modifier::Alt => alt_pressed,
-                            Modifier::Shift => shift_pressed,
-                        });
-                        if !mods_ok {
-                            return;
-                        }
-                        let key_ok = match &pat.key {
-                            HotkeyKey::Letter(ch) => key_to_letter(&key) == Some(*ch),
-                            HotkeyKey::Number(n) => key_to_digit(&key) == Some(*n),
-                            HotkeyKey::Space => matches!(key, Key::Space),
-                            HotkeyKey::F(n) => key_to_f(&key) == Some(*n),
-                        };
-                        if key_ok {
-                            tracing::debug!("hotkey triggered");
-                            if tx.try_send(()).is_err() {
-                                tracing::warn!("hotkey channel full, dropping event");
-                            }
-                        }
-                    }
-                    _ => {}
+                if RegisterHotKey(std::ptr::null_mut(), 2, fs_english | 0x4000, vk_english) == 0 {
+                    let err = GetLastError();
+                    tracing::error!("RegisterHotKey (English) failed with error code: {err}");
+                    UnregisterHotKey(std::ptr::null_mut(), 1);
+                    return;
                 }
-            };
+                if RegisterHotKey(
+                    std::ptr::null_mut(),
+                    3,
+                    fs_instruction | 0x4000,
+                    vk_instruction,
+                ) == 0
+                {
+                    let err = GetLastError();
+                    tracing::error!("RegisterHotKey (Instruction) failed with error code: {err}");
+                    UnregisterHotKey(std::ptr::null_mut(), 1);
+                    UnregisterHotKey(std::ptr::null_mut(), 2);
+                    return;
+                }
+                tracing::info!("RegisterHotKey: all three global hotkeys registered successfully");
 
-            if let Err(err) = listen(callback) {
-                tracing::error!("hotkey listener error: {err:?}");
+                let mut msg = std::mem::zeroed::<MSG>();
+                while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) != 0 {
+                    if msg.message == WM_HOTKEY && enabled.load(Ordering::Relaxed) {
+                        let action = match msg.wParam as i32 {
+                            1 => super::HotkeyAction::TranslateDefault,
+                            2 => super::HotkeyAction::TranslateEnglish,
+                            3 => super::HotkeyAction::ExecuteInstruction,
+                            _ => continue,
+                        };
+                        tracing::info!("RegisterHotKey: hotkey triggered for action {:?}", action);
+                        if tx.try_send(action).is_err() {
+                            tracing::warn!("hotkey channel full, dropping event");
+                        }
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+
+                UnregisterHotKey(std::ptr::null_mut(), 1);
+                UnregisterHotKey(std::ptr::null_mut(), 2);
+                UnregisterHotKey(std::ptr::null_mut(), 3);
             }
         });
 
@@ -232,13 +206,13 @@ mod platform {
 
 #[cfg(not(windows))]
 mod platform {
-    use super::HotkeyPattern;
+    use super::{HotkeyAction, HotkeyPattern};
     use anyhow::Result;
     use std::sync::{Arc, Mutex, atomic::AtomicBool};
     use tokio::sync::mpsc;
 
     pub fn start(
-        _tx: mpsc::Sender<()>,
+        _tx: mpsc::Sender<HotkeyAction>,
         _pattern: Arc<Mutex<HotkeyPattern>>,
         _enabled: Arc<AtomicBool>,
     ) -> Result<()> {
@@ -248,7 +222,7 @@ mod platform {
 }
 
 pub fn start(
-    tx: mpsc::Sender<()>,
+    tx: mpsc::Sender<HotkeyAction>,
     pattern: Arc<Mutex<HotkeyPattern>>,
     enabled: Arc<AtomicBool>,
 ) -> Result<()> {

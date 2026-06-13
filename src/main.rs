@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![windows_subsystem = "windows"]
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, atomic::AtomicBool};
@@ -10,6 +10,26 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let current_pid = std::process::id();
+        let _ = std::process::Command::new("taskkill")
+            .args([
+                "/F",
+                "/FI",
+                &format!("PID ne {}", current_pid),
+                "/IM",
+                "thoth.exe",
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .status();
+        // Give a brief moment for the OS to release the hotkey and file handles
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
     let config = Config::load().unwrap_or_default();
 
     let log_file = if let Some(ref path_str) = config.behavior.log_path {
@@ -39,20 +59,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Thoth v{} starting", env!("CARGO_PKG_VERSION"));
 
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!(
-                    "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Get-Content \\\"{}\\\" -Wait -Tail 50'",
-                    log_file.to_string_lossy()
-                ),
-            ])
-            .spawn();
-    }
-
     let mut config = config;
     if config.pylos.secret.is_empty() {
         config.pylos.secret = uuid_v4();
@@ -76,11 +82,44 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let (hotkey_tx, hotkey_rx) = tokio::sync::mpsc::channel::<()>(16);
+    let (hotkey_tx, hotkey_rx) = tokio::sync::mpsc::channel::<thoth::hotkey::HotkeyAction>(16);
     thoth::hotkey::start(hotkey_tx, hotkey_pattern, enabled)?;
     tracing::info!("hotkey listener started ({})", config.behavior.hotkey);
 
-    let mut orchestrator = Orchestrator::new(hotkey_rx, config)?;
+    let mut orchestrator = Orchestrator::new(hotkey_rx, config.clone())?;
+
+    tracing::info!(
+        "Testing connection to Ollama/Pylos endpoint at {}...",
+        orchestrator.endpoint()
+    );
+    match orchestrator.test_connection().await {
+        Ok(_) => {
+            tracing::info!("Connection to Ollama/Pylos endpoint is OK");
+
+            // Effectue un test de traduction au démarrage
+            let test_model = config.pylos.model.clone();
+            tracing::info!("Testing translation with model '{}'...", test_model);
+            match orchestrator.test_translate("Hello world").await {
+                Ok(translated) => {
+                    tracing::info!(
+                        "Translation test successful: 'Hello world' -> '{}'",
+                        translated.trim()
+                    );
+                }
+                Err(e) => {
+                    tracing::error!("Translation test failed with model '{}': {}", test_model, e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Connection test failed: {e}");
+            thoth::notification::notify_error(&format!(
+                "Impossible de se connecter à Ollama/Pylos ({}) : {}",
+                orchestrator.endpoint(),
+                e
+            ));
+        }
+    }
 
     tokio::select! {
         _ = orchestrator.run() => {}
