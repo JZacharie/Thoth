@@ -90,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust (1.85.0)
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@1.100.0
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
