@@ -2,7 +2,20 @@
 vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
-ignore = []
+ignore = [
+    # tray-icon dépend de gtk (Linux seulement), pas utilisé sur Windows
+    "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0412",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0420",
+    "RUSTSEC-2024-0419",
+    # glib: unsound dans un itérateur non utilisé par Thoth
+    "RUSTSEC-2024-0429",
+    # proc-macro-error: déprécié, dépendance transitive
+    "RUSTSEC-2024-0370",
+]
 
 [licenses]
 unlicensed = "deny"

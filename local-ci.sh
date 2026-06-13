@@ -69,7 +69,7 @@ else
 fi
 
 if command -v cargo-udeps &>/dev/null; then
-    check "cargo udeps" cargo udeps --all-targets
+    check "cargo udeps" cargo +nightly udeps --all-targets
 else
     echo -e "${YELLOW}⚠ cargo-udeps non installé — saute (cargo install cargo-udeps)${NC}"
 fi

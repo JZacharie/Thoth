@@ -15,7 +15,10 @@ anyhow = "1"
 toml = "1.1"
 thiserror = "2"
 regex = "1"
-tracing-error = "0.2"
+
+[package.metadata.cargo-udeps.ignore]
+development = []
+normal = ["thiserror"]
 
 [dev-dependencies]
 wiremock = "0.6"
