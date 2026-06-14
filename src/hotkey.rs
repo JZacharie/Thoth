@@ -25,6 +25,7 @@ pub enum HotkeyKey {
     F(u8),
     Comma,
     Semicolon,
+    Colon,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +62,7 @@ impl HotkeyPattern {
                     "space" => HotkeyKey::Space,
                     "comma" | "," => HotkeyKey::Comma,
                     "semicolon" | ";" => HotkeyKey::Semicolon,
+                    "colon" | ":" => HotkeyKey::Colon,
                     s if s.starts_with('f') && s[1..].parse::<u8>().is_ok() => {
                         HotkeyKey::F(s[1..].parse().unwrap())
                     }
@@ -116,6 +118,7 @@ mod platform {
             HotkeyKey::F(n) => 0x70 + (*n as u32 - 1),
             HotkeyKey::Comma => 0xBC,
             HotkeyKey::Semicolon => 0xBA,
+            HotkeyKey::Colon => 0xBF,
         }
     }
 
@@ -132,7 +135,7 @@ mod platform {
         let fs_english = get_win32_modifiers(&pat_english.modifiers);
         let vk_english = get_win32_vk(&pat_english.key);
 
-        let pat_instruction = HotkeyPattern::parse("Ctrl+Shift+Win+;").unwrap();
+        let pat_instruction = HotkeyPattern::parse("Ctrl+Shift+Win+:").unwrap();
         let fs_instruction = get_win32_modifiers(&pat_instruction.modifiers);
         let vk_instruction = get_win32_vk(&pat_instruction.key);
 

@@ -2,6 +2,7 @@ pub mod auto_start;
 pub mod clipboard;
 pub mod config;
 pub mod dialog;
+pub mod gui;
 pub mod hotkey;
 pub mod metrics;
 pub mod notification;

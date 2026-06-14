@@ -78,7 +78,7 @@ mod platform {
         shutdown_tx: oneshot::Sender<()>,
         enabled: Arc<AtomicBool>,
         log_path: PathBuf,
-        config_path: PathBuf,
+        _config_path: PathBuf,
     ) -> Result<()> {
         let s = menu_strings();
         let menu = Menu::new();
@@ -179,10 +179,8 @@ mod platform {
                         }
                         auto_start_item.set_checked(new_state);
                     } else if event.id == config_item.id() {
-                        if config_path.exists() {
-                            let _ = std::process::Command::new("cmd")
-                                .args(["/c", "start", "", &config_path.to_string_lossy()])
-                                .spawn();
+                        if let Ok(exe_path) = std::env::current_exe() {
+                            let _ = std::process::Command::new(exe_path).arg("--config").spawn();
                         }
                     } else if event.id == stats_item.id() {
                         let s = menu_strings();
