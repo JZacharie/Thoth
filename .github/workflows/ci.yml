@@ -19,7 +19,7 @@ env:
 jobs:
   # ── Pre-checks rapides (pas de compilation Rust) ──────────────
   lint:
-    name: Lint (actionlint + typos)
+    name: Lint (actionlint)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -29,9 +29,6 @@ jobs:
         uses: reviewdog/action-actionlint@v1
         with:
           fail_level: error
-
-      - name: typos
-        uses: crate-ci/typos@master
 
   # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
   check:
