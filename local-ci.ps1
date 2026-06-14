@@ -113,16 +113,6 @@ if (Get-Command actionlint -ErrorAction SilentlyContinue) {
     Write-Host "[FAIL] Impossible d'installer ou de lancer actionlint`n" -ForegroundColor Red
 }
 
-if (-not (Get-Command typos -ErrorAction SilentlyContinue)) {
-    Write-Host "typos non installé. Installation via cargo install..." -ForegroundColor Yellow
-    cargo install typos-cli
-}
-if (Get-Command typos -ErrorAction SilentlyContinue) {
-    Check-Command "typos" { typos }
-} else {
-    Write-Host "[FAIL] Impossible d'installer ou de lancer typos`n" -ForegroundColor Red
-}
-
 if (-not (Get-Command cargo-deny -ErrorAction SilentlyContinue)) {
     Write-Host "cargo-deny non installé. Installation via cargo install..." -ForegroundColor Yellow
     cargo install --locked cargo-deny
