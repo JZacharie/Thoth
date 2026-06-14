@@ -1,32 +1,61 @@
 use anyhow::Result;
+use std::sync::{Arc, Mutex};
 
 #[cfg(windows)]
 pub fn show_prompt_dialog() -> Result<String> {
-    use std::os::windows::process::CommandExt;
-    let script = r#"
-Add-Type -AssemblyName Microsoft.VisualBasic
-$result = [Microsoft.VisualBasic.Interaction]::InputBox("Entrez votre instruction personnalisée :", "Thoth — Instruction personnalisée", "")
-if ([string]::IsNullOrWhiteSpace($result)) { exit 1 }
-Write-Output $result
-exit 0
-"#;
+    let result = Arc::new(Mutex::new(None));
+    let result_clone = result.clone();
 
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", script])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .creation_flags(0x08000000)
-        .output()?;
+    let options = eframe::NativeOptions {
+        viewport: eframe::egui::ViewportBuilder::default()
+            .with_inner_size(eframe::egui::vec2(300.0, 120.0))
+            .with_resizable(false),
+        ..Default::default()
+    };
 
-    if output.status.success() {
-        let text = String::from_utf8(output.stdout)?.trim().to_string();
-        if text.is_empty() {
-            anyhow::bail!("empty input");
-        }
-        Ok(text)
-    } else {
-        anyhow::bail!("user cancelled or input was empty");
+    struct App {
+        input: String,
+        result: Arc<Mutex<Option<String>>>,
     }
+
+    impl eframe::App for App {
+        fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+            eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                ui.label("Entrez votre instruction personnalisée :");
+                let resp = ui.text_edit_singleline(&mut self.input);
+                resp.request_focus();
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked()
+                        || ui.input(|i| i.key_pressed(eframe::egui::Key::Enter))
+                    {
+                        let mut res = self.result.lock().unwrap();
+                        *res = Some(self.input.clone());
+                        ctx.send_viewport_cmd(eframe::egui::ViewportCommand::Close);
+                    }
+                    if ui.button("Annuler").clicked() {
+                        ctx.send_viewport_cmd(eframe::egui::ViewportCommand::Close);
+                    }
+                });
+            });
+        }
+    }
+
+    let app = App {
+        input: String::new(),
+        result: result_clone,
+    };
+
+    eframe::run_native(
+        "Thoth — Instruction",
+        options,
+        Box::new(|_cc| Ok(Box::new(app))),
+    )
+    .map_err(|e| anyhow::anyhow!("Eframe error: {:?}", e))?;
+
+    let res = result.lock().unwrap().clone();
+    res.ok_or_else(|| anyhow::anyhow!("cancelled"))
 }
 
 #[cfg(not(windows))]

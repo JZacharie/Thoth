@@ -11,19 +11,19 @@
 
 ### Features
 
-- **Global Hotkey (`Ctrl+Win+N`)** — trigger from any text input field
+- **Global Hotkeys** — trigger default translation (`Ctrl+Win+N`), English translation (`Ctrl+Shift+Win+,`), or custom prompt GUI overlay (`Ctrl+Shift+Win+:`) from any text input field
 - **Automatic Copy/Paste** — simulates `Ctrl+C` / `Ctrl+V` to grab and replace text
-- **LLM-powered Translation** — sends text to a local [Pylos](https://github.com/JZacharie/Pylos) gateway, which relays to any LLM (default: `gemma4:12b`)
+- **LLM-powered Translation** — sends text to a secure [Pylos](https://github.com/JZacharie/Pylos) gateway, which relays to any LLM (default: `gemma4:12b`)
 - **Model Fallback** — automatically retries with a secondary model if the primary fails
 - **10 Target Languages** — French, English, Spanish, German, Italian, Portuguese, Dutch, Japanese, Chinese, Russian
-- **Sensitive Data Protection** — blocks API keys, JWTs, private keys, and credit card numbers
+- **Harneded Sensitive Data Protection** — blocks API keys (ghp, AKIA, etc.), JWTs, private keys, credit card numbers, Slack webhooks, and database URIs (MongoDB, Postgres, MySQL)
 - **Clipboard Preservation** — original clipboard content is restored after each operation
-- **System Tray Menu** — enable/disable, auto-start with Windows, usage statistics, quit
-- **Usage Metrics** — tracks translations, errors, latency, and per-model usage (persisted as JSON)
+- **System Tray Menu & Top Menu Bar** — enable/disable, auto-start, stats, config editor directly in the app
+- **Usage Metrics** — tracks translations, errors, latency, and per-model usage (persisted securely)
 - **Windows Toast Notifications** — success, error, and warning alerts
-- **Configurable Hotkey** — customizable key combination (e.g., `Ctrl+Shift+T`, `Alt+Space`)
-- **Auto-Start** — register for automatic launch at Windows boot
-- **Hot-Reload Configuration** — config changes apply without restarting the app
+- **Configurable Hotkey & Enforced HTTPS** — customizable hotkeys and default HTTPS enforcement (with certificate verification, bypassable via `--insecure` for local dev)
+- **Redacted Logs** — never logs original or translated text, logs only lengths and hashes of the payload
+- **Security & Integrity** — WinVerifyTrust executable signature verification at startup and native in-process dialog overlays
 
 ### How it Works
 
@@ -165,19 +165,19 @@ MIT — see [LICENSE](LICENSE).
 
 ### Fonctionnalités
 
-- **Raccourci Global (`Ctrl+Win+N`)** — déclenchement depuis n'importe quel champ de saisie
+- **Raccourcis Globaux** — déclenchement de la traduction par défaut (`Ctrl+Win+N`), traduction vers l'anglais (`Ctrl+Shift+Win+,`), ou console d'instruction personnalisée overlay GUI (`Ctrl+Shift+Win+:`) depuis n'importe quel champ de saisie
 - **Copier/Coller Automatique** — simule `Ctrl+C` / `Ctrl+V` pour intercepter et remplacer le texte
-- **Traduction par LLM** — envoi à une passerelle [Pylos](https://github.com/JZacharie/Pylos) locale qui relaie vers le LLM (défaut : `gemma4:12b`)
+- **Traduction par LLM** — envoi à une passerelle sécurisée [Pylos](https://github.com/JZacharie/Pylos) qui relaie vers le LLM (défaut : `gemma4:12b`)
 - **Modèle de Secours** — tentative automatique avec un second modèle si le principal échoue
 - **10 Langues Cibles** — français, anglais, espagnol, allemand, italien, portugais, néerlandais, japonais, chinois, russe
-- **Protection des Données Sensibles** — blocage des clés API, JWT, clés privées, numéros de carte bancaire
+- **Protection des Données Sensibles Durcie** — blocage des clés API (ghp, AKIA, etc.), JWT, clés privées, numéros de carte bancaire, webhooks Slack et URI de base de données (MongoDB, Postgres, MySQL)
 - **Préservation du Presse-papier** — le contenu original est restauré après chaque opération
-- **Menu dans la Barre d'État** — activer/désactiver, démarrer avec Windows, statistiques, quitter
-- **Métriques d'Utilisation** — traductions, erreurs, latence, usage par modèle (fichier JSON)
+- **Menu Barre d'État & Barre de Menu Intégrée** — activer/désactiver, démarrage auto, stats, éditeur de configuration intégré directement dans l'application
+- **Métriques d'Utilisation** — traductions, erreurs, latence, usage par modèle (sécurisé)
 - **Notifications Toast Windows** — alertes de succès, erreur et avertissement
-- **Raccourci Configurable** — combinaison de touches personnalisable (ex: `Ctrl+Shift+T`, `Alt+Space`)
-- **Démarrage Automatique** — inscription au registre Windows pour un lancement au boot
-- **Configuration à Chaud** — les modifications du fichier de config sont appliquées sans redémarrage
+- **Raccourcis Configurables & HTTPS Forcé** — raccourcis personnalisables et HTTPS obligatoire avec validation TLS (contournable via `--insecure` pour dev local)
+- **Journaux Caviardés (Redacted)** — aucun texte utilisateur ou traduit n'est écrit dans `thoth.log`, seuls les tailles et hashes des contenus sont conservés
+- **Sécurité & Intégrité** — vérification de signature de l'exécutable via WinVerifyTrust au démarrage et boîtes de dialogue natives sans spawning de processus externe (PowerShell)
 
 ### Fonctionnement
 

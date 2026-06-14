@@ -119,14 +119,31 @@ impl Orchestrator {
                     };
 
                     tracing::info!(
-                        "orchestrator: translating text to {}: {:?}",
+                        "orchestrator: translating text to {} (len: {}, hash: {:x})",
                         target_lang,
-                        original_text
+                        original_text.len(),
+                        {
+                            use std::collections::hash_map::DefaultHasher;
+                            use std::hash::{Hash, Hasher};
+                            let mut s = DefaultHasher::new();
+                            original_text.hash(&mut s);
+                            s.finish()
+                        }
                     );
 
                     match self.pylos.translate_to(&original_text, target_lang).await {
                         Ok(t) => {
-                            tracing::info!("orchestrator: translation successful: {:?}", t);
+                            tracing::info!(
+                                "orchestrator: translation successful (len: {}, hash: {:x})",
+                                t.len(),
+                                {
+                                    use std::collections::hash_map::DefaultHasher;
+                                    use std::hash::{Hash, Hasher};
+                                    let mut s = DefaultHasher::new();
+                                    t.hash(&mut s);
+                                    s.finish()
+                                }
+                            );
                             t
                         }
                         Err(e) => {

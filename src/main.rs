@@ -11,9 +11,28 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    let is_insecure = args.iter().any(|arg| arg == "--insecure");
+    thoth::set_insecure(is_insecure);
     let is_gui = args
         .iter()
         .any(|arg| arg == "--prompt" || arg == "--config");
+
+    #[cfg(windows)]
+    {
+        if !cfg!(debug_assertions) {
+            #[allow(clippy::collapsible_if)]
+            if let Err(e) = verify_self_signature() {
+                tracing::error!(
+                    "Executable signature verification failed: {e}. Terminating for security."
+                );
+                thoth::notification::notify_error(&format!(
+                    "Erreur de sécurité : signature invalide. ({})",
+                    e
+                ));
+                std::process::exit(1);
+            }
+        }
+    }
 
     if !is_gui {
         #[cfg(windows)]
@@ -176,4 +195,115 @@ fn uuid_v4() -> String {
         .unwrap_or_default();
     let seed = now.as_nanos() as u64;
     format!("thoth-{seed:016x}")
+}
+
+#[cfg(windows)]
+#[allow(
+    non_snake_case,
+    clippy::upper_case_acronyms,
+    clippy::manual_c_str_literals
+)]
+fn verify_self_signature() -> anyhow::Result<()> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+
+    #[repr(C)]
+    struct GUID {
+        data1: u32,
+        data2: u16,
+        data3: u16,
+        data4: [u8; 8],
+    }
+
+    #[repr(C)]
+    struct WINTRUST_FILE_INFO {
+        cbStruct: u32,
+        pcwszFilePath: *const u16,
+        hFile: *mut std::ffi::c_void,
+        pgKnownSubject: *const GUID,
+    }
+
+    #[repr(C)]
+    struct WINTRUST_DATA {
+        cbStruct: u32,
+        pPolicyCallbackData: *mut std::ffi::c_void,
+        pSIPClientData: *mut std::ffi::c_void,
+        dwUIChoice: u32,
+        fdwRevocationChecks: u32,
+        unionChoice: u32,
+        file_info: *const WINTRUST_FILE_INFO,
+        dwStateAction: u32,
+        hWVTStateData: *mut std::ffi::c_void,
+        pwszURLReference: *mut u16,
+        dwProvFlags: u32,
+        dwUIContext: u32,
+        pSignatureSettings: *mut std::ffi::c_void,
+    }
+
+    // WINTRUST_ACTION_GENERIC_VERIFY_V2
+    let action_id = GUID {
+        data1: 0x00aac56b,
+        data2: 0xcd44,
+        data3: 0x11d0,
+        data4: [0x8c, 0xeb, 0x00, 0xc0, 0x4f, 0xc2, 0x95, 0xee],
+    };
+
+    let exe_path = std::env::current_exe()?;
+    let mut path_wide: Vec<u16> = OsStr::new(&exe_path).encode_wide().collect();
+    path_wide.push(0);
+
+    let file_info = WINTRUST_FILE_INFO {
+        cbStruct: std::mem::size_of::<WINTRUST_FILE_INFO>() as u32,
+        pcwszFilePath: path_wide.as_ptr(),
+        hFile: ptr::null_mut(),
+        pgKnownSubject: ptr::null(),
+    };
+
+    let wintrust_data = WINTRUST_DATA {
+        cbStruct: std::mem::size_of::<WINTRUST_DATA>() as u32,
+        pPolicyCallbackData: ptr::null_mut(),
+        pSIPClientData: ptr::null_mut(),
+        dwUIChoice: 2,          // WTD_UI_NONE = 2
+        fdwRevocationChecks: 0, // WTD_REVOKE_NONE
+        unionChoice: 1,         // WTD_CHOICE_FILE = 1
+        file_info: &file_info,
+        dwStateAction: 0,
+        hWVTStateData: ptr::null_mut(),
+        pwszURLReference: ptr::null_mut(),
+        dwProvFlags: 0x00000040, // WTD_REVOCATION_CHECK_NONE = 0x00000040
+        dwUIContext: 0,
+        pSignatureSettings: ptr::null_mut(),
+    };
+
+    unsafe {
+        let wintrust =
+            windows_sys::Win32::System::LibraryLoader::LoadLibraryA(b"wintrust.dll\0".as_ptr());
+        if wintrust.is_null() {
+            return Err(anyhow::anyhow!("Failed to load wintrust.dll"));
+        }
+        let win_verify_trust_addr = windows_sys::Win32::System::LibraryLoader::GetProcAddress(
+            wintrust,
+            b"WinVerifyTrust\0".as_ptr(),
+        );
+        if win_verify_trust_addr.is_none() {
+            return Err(anyhow::anyhow!(
+                "Failed to find WinVerifyTrust in wintrust.dll"
+            ));
+        }
+        let win_verify_trust: unsafe extern "system" fn(
+            hwnd: *mut std::ffi::c_void,
+            pgActionID: *const GUID,
+            pWintrustData: *const WINTRUST_DATA,
+        ) -> i32 = std::mem::transmute(win_verify_trust_addr);
+
+        let result = win_verify_trust(ptr::null_mut(), &action_id, &wintrust_data);
+        if result != 0 {
+            return Err(anyhow::anyhow!(
+                "Signature verification failed: WinVerifyTrust returned {:x}",
+                result
+            ));
+        }
+    }
+    Ok(())
 }
