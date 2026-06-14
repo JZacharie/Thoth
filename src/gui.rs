@@ -160,7 +160,9 @@ impl ThothGuiApp {
                         unsafe {
                             let aw = active_window_addr as *mut std::ffi::c_void;
                             if !aw.is_null() {
-                                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(aw);
+                                windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(
+                                    aw,
+                                );
                                 std::thread::sleep(std::time::Duration::from_millis(150));
                             }
                         }
@@ -187,7 +189,7 @@ fn apply_theme(ctx: &egui::Context) {
     vis.faint_bg_color = BG_CARD;
     vis.code_bg_color = BG_FIELD;
     vis.window_rounding = Rounding::same(10.0);
-    vis.window_stroke = Stroke::new(1.0, BORDER);
+    vis.window_stroke = Stroke::new(1.0_f32, BORDER);
 
     let r = Rounding::same(ROUNDING);
     for w in [
@@ -199,30 +201,38 @@ fn apply_theme(ctx: &egui::Context) {
     ] {
         w.rounding = r;
     }
-    vis.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_WHITE);
-    vis.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT_WHITE);
-    vis.widgets.hovered.fg_stroke = Stroke::new(1.0, TEXT_WHITE);
-    vis.widgets.active.fg_stroke = Stroke::new(1.0, TEXT_WHITE);
+    vis.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
+    vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
+    vis.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
+    vis.widgets.active.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
 
     vis.widgets.inactive.weak_bg_fill = BG_FIELD;
     vis.widgets.hovered.weak_bg_fill = BG_HOVER;
     vis.widgets.active.weak_bg_fill = BG_HOVER;
     vis.widgets.inactive.bg_fill = BG_FIELD;
 
-    vis.widgets.inactive.bg_stroke = Stroke::new(1.0, BORDER);
-    vis.widgets.hovered.bg_stroke = Stroke::new(1.5, ACCENT_BLUE);
-    vis.widgets.active.bg_stroke = Stroke::new(1.5, ACCENT_BLUE);
+    vis.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
+    vis.widgets.hovered.bg_stroke = Stroke::new(1.5_f32, ACCENT_BLUE);
+    vis.widgets.active.bg_stroke = Stroke::new(1.5_f32, ACCENT_BLUE);
 
     vis.selection.bg_fill = Color32::from_rgba_premultiplied(31, 149, 255, 55);
-    vis.selection.stroke = Stroke::new(1.0, ACCENT_BLUE);
+    vis.selection.stroke = Stroke::new(1.0_f32, ACCENT_BLUE);
 
     ctx.set_visuals(vis);
 
     let mut style = (*ctx.style()).clone();
-    style.text_styles.insert(egui::TextStyle::Body, FontId::proportional(14.0));
-    style.text_styles.insert(egui::TextStyle::Button, FontId::proportional(14.0));
-    style.text_styles.insert(egui::TextStyle::Heading, FontId::proportional(16.0));
-    style.text_styles.insert(egui::TextStyle::Small, FontId::proportional(12.5));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Body, FontId::proportional(14.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, FontId::proportional(14.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, FontId::proportional(16.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, FontId::proportional(12.5));
     style.spacing.item_spacing = Vec2::new(8.0, 8.0);
     style.spacing.button_padding = Vec2::new(14.0, 8.0);
     style.spacing.window_margin = egui::Margin::same(0.0);
@@ -256,7 +266,7 @@ impl ThothGuiApp {
                 // ── Textarea ──────────────────────────────────────────────
                 let input_frame = egui::Frame::none()
                     .fill(BG_CARD)
-                    .stroke(Stroke::new(1.0, BORDER))
+                    .stroke(Stroke::new(1.0_f32, BORDER))
                     .rounding(Rounding::same(ROUNDING))
                     .inner_margin(egui::Margin::same(12.0));
 
@@ -331,15 +341,12 @@ impl ThothGuiApp {
                             for (idx, item) in self.history.iter().enumerate() {
                                 let is_sel = self.selected_history_index == Some(idx);
                                 let w = ui.available_width();
-                                let (rect, resp) =
-                                    ui.allocate_exact_size(Vec2::new(w, 28.0), egui::Sense::click());
+                                let (rect, resp) = ui
+                                    .allocate_exact_size(Vec2::new(w, 28.0), egui::Sense::click());
 
                                 if resp.hovered() || is_sel {
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        Rounding::same(4.0),
-                                        BG_HOVER,
-                                    );
+                                    ui.painter()
+                                        .rect_filled(rect, Rounding::same(4.0), BG_HOVER);
                                 }
 
                                 // Italic history item
@@ -363,7 +370,7 @@ impl ThothGuiApp {
                                     );
                                     ui.painter().line_segment(
                                         [dr.left_center(), dr.right_center()],
-                                        Stroke::new(1.0, DIVIDER),
+                                        Stroke::new(1.0_f32, DIVIDER),
                                     );
                                 }
                             }
@@ -406,7 +413,11 @@ impl ThothGuiApp {
 
     fn draw_config(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(BG).inner_margin(egui::Margin::same(PAD)))
+            .frame(
+                egui::Frame::none()
+                    .fill(BG)
+                    .inner_margin(egui::Margin::same(PAD)),
+            )
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     // Each field: label above, full-width input below
@@ -447,12 +458,10 @@ impl ThothGuiApp {
                     });
                     cfg_field(ui, "Timeout (s)", |ui| {
                         ui.add(
-                            egui::TextEdit::singleline(&mut format_timeout(self.timeout_secs))
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
+                            egui::DragValue::new(&mut self.timeout_secs)
+                                .range(1..=300)
+                                .suffix(" s"),
                         );
-                        // Use DragValue for actual editing
-                        ui.add(egui::DragValue::new(&mut self.timeout_secs).range(1..=300));
                     });
 
                     ui.add_space(4.0);
@@ -529,7 +538,11 @@ impl ThothGuiApp {
 
     fn draw_stats(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(BG).inner_margin(egui::Margin::same(PAD)))
+            .frame(
+                egui::Frame::none()
+                    .fill(BG)
+                    .inner_margin(egui::Margin::same(PAD)),
+            )
             .show(ctx, |ui| {
                 let metrics = UsageMetrics::load();
                 let avail_w = ui.available_width();
@@ -538,9 +551,23 @@ impl ThothGuiApp {
 
                 // Row 1
                 ui.horizontal(|ui| {
-                    stat_card(ui, "Translations", &format_num(metrics.total_translations), C_TEAL, card_w, card_h);
+                    stat_card(
+                        ui,
+                        "Translations",
+                        &format_num(metrics.total_translations),
+                        C_TEAL,
+                        card_w,
+                        card_h,
+                    );
                     ui.add_space(12.0);
-                    stat_card(ui, "Errors", &metrics.total_errors.to_string(), C_RED, card_w, card_h);
+                    stat_card(
+                        ui,
+                        "Errors",
+                        &metrics.total_errors.to_string(),
+                        C_RED,
+                        card_w,
+                        card_h,
+                    );
                 });
                 ui.add_space(12.0);
                 // Row 2
@@ -555,7 +582,14 @@ impl ThothGuiApp {
                     );
                     ui.add_space(12.0);
                     let mb = metrics.total_bytes_processed as f64 / 1_048_576.0;
-                    stat_card(ui, "Volume", &format!("{mb:.1} MB"), C_PURPLE, card_w, card_h);
+                    stat_card(
+                        ui,
+                        "Volume",
+                        &format!("{mb:.1} MB"),
+                        C_PURPLE,
+                        card_w,
+                        card_h,
+                    );
                 });
 
                 // Model usage bars
@@ -572,7 +606,11 @@ impl ThothGuiApp {
                     let total: u64 = metrics.model_usage.values().sum();
                     let bar_colors = [BAR_BLUE, BAR_GREEN, ACCENT_BLUE, C_PURPLE, C_YELLOW];
                     for (i, (model, count)) in metrics.model_usage.iter().enumerate() {
-                        let pct = if total > 0 { *count as f32 / total as f32 } else { 0.0 };
+                        let pct = if total > 0 {
+                            *count as f32 / total as f32
+                        } else {
+                            0.0
+                        };
                         let bar_color = bar_colors[i % bar_colors.len()];
                         model_usage_bar(ui, model, *count, pct, bar_color);
                         ui.add_space(6.0);
@@ -594,7 +632,11 @@ impl ThothGuiApp {
 
 fn blue_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), egui::Sense::click());
-    let color = if resp.hovered() { ACCENT_BLUE_HOV } else { ACCENT_BLUE };
+    let color = if resp.hovered() {
+        ACCENT_BLUE_HOV
+    } else {
+        ACCENT_BLUE
+    };
     ui.painter().rect_filled(rect, Rounding::same(6.0), color);
     ui.painter().text(
         rect.center(),
@@ -608,7 +650,11 @@ fn blue_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
 
 fn green_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, h), egui::Sense::click());
-    let color = if resp.hovered() { ACCENT_GREEN_HOV } else { ACCENT_GREEN };
+    let color = if resp.hovered() {
+        ACCENT_GREEN_HOV
+    } else {
+        ACCENT_GREEN
+    };
     ui.painter().rect_filled(rect, Rounding::same(6.0), color);
     ui.painter().text(
         rect.center(),
@@ -628,7 +674,8 @@ fn gray_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
         Color32::from_rgb(45, 52, 68)
     };
     ui.painter().rect_filled(rect, Rounding::same(6.0), bg);
-    ui.painter().rect_stroke(rect, Rounding::same(6.0), Stroke::new(1.0, BORDER));
+    ui.painter()
+        .rect_stroke(rect, Rounding::same(6.0), Stroke::new(1.0_f32, BORDER));
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -648,17 +695,14 @@ fn cfg_field(ui: &mut egui::Ui, label: &str, content: impl FnOnce(&mut egui::Ui)
     ui.add_space(8.0);
 }
 
-// Dummy helper — timeout displayed as string (DragValue is the actual editor)
-fn format_timeout(secs: u64) -> String {
-    secs.to_string()
-}
-
 // ── Stat card widget ──────────────────────────────────────────────────────────
 
 fn stat_card(ui: &mut egui::Ui, label: &str, value: &str, value_color: Color32, w: f32, h: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(w, h), egui::Sense::hover());
-    ui.painter().rect_filled(rect, Rounding::same(ROUNDING), BG_CARD);
-    ui.painter().rect_stroke(rect, Rounding::same(ROUNDING), Stroke::new(1.0, BORDER));
+    ui.painter()
+        .rect_filled(rect, Rounding::same(ROUNDING), BG_CARD);
+    ui.painter()
+        .rect_stroke(rect, Rounding::same(ROUNDING), Stroke::new(1.0_f32, BORDER));
 
     // Label at top-centre
     ui.painter().text(
@@ -691,14 +735,13 @@ fn model_usage_bar(ui: &mut egui::Ui, model: &str, count: u64, pct: f32, color: 
         // Model name
         ui.add_sized(
             Vec2::new(label_w, bar_h),
-            egui::Label::new(
-                egui::RichText::new(model).color(TEXT_MUTED).size(13.0),
-            ),
+            egui::Label::new(egui::RichText::new(model).color(TEXT_MUTED).size(13.0)),
         );
 
         // Bar background + fill
         let (rect, _) = ui.allocate_exact_size(Vec2::new(bar_area, bar_h), egui::Sense::hover());
-        ui.painter().rect_filled(rect, Rounding::same(4.0), BG_FIELD);
+        ui.painter()
+            .rect_filled(rect, Rounding::same(4.0), BG_FIELD);
         let fill_w = (bar_area * pct).max(0.0);
         if fill_w > 0.0 {
             let fill = egui::Rect::from_min_size(rect.min, Vec2::new(fill_w, bar_h));
@@ -733,8 +776,8 @@ fn format_num(n: u64) -> String {
 fn load_history() -> Vec<String> {
     #[cfg(windows)]
     {
-        use winreg::enums::HKEY_CURRENT_USER;
         use winreg::RegKey;
+        use winreg::enums::HKEY_CURRENT_USER;
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         if let Ok(val) = hkcu
             .open_subkey("Software\\Thoth")
@@ -758,8 +801,8 @@ fn load_history() -> Vec<String> {
 fn save_history(history: &[String]) {
     #[cfg(windows)]
     {
-        use winreg::enums::HKEY_CURRENT_USER;
         use winreg::RegKey;
+        use winreg::enums::HKEY_CURRENT_USER;
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         if let Ok((key, _)) = hkcu.create_subkey("Software\\Thoth") {
             let val = history.join("\n");

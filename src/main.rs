@@ -121,15 +121,33 @@ async fn main_inner() -> anyhow::Result<()> {
         };
 
         let mut options = eframe::NativeOptions::default();
+
+        // ── Window icon ──────────────────────────────────────────────────────
+        // Embedded at compile time — no runtime file dependency
+        let icon: Option<std::sync::Arc<eframe::egui::IconData>> = {
+            const ICON_BYTES: &[u8] = include_bytes!("../resources/thoth.png");
+            image::load_from_memory(ICON_BYTES).ok().map(|img| {
+                let rgba = img.into_rgba8();
+                let (w, h) = rgba.dimensions();
+                std::sync::Arc::new(eframe::egui::IconData {
+                    rgba: rgba.into_raw(),
+                    width: w,
+                    height: h,
+                })
+            })
+        };
+
         let mut viewport = eframe::egui::ViewportBuilder::default()
-            .with_inner_size(if mode == thoth::gui::GuiMode::Config {
-                eframe::egui::vec2(450.0, 500.0)
-            } else if mode == thoth::gui::GuiMode::Stats {
-                eframe::egui::vec2(450.0, 350.0)
-            } else {
-                eframe::egui::vec2(450.0, 300.0)
+            .with_inner_size(match mode {
+                thoth::gui::GuiMode::Config => eframe::egui::vec2(480.0, 620.0),
+                thoth::gui::GuiMode::Stats => eframe::egui::vec2(540.0, 480.0),
+                thoth::gui::GuiMode::Prompt => eframe::egui::vec2(480.0, 400.0),
             })
             .with_resizable(true);
+
+        if let Some(icon_data) = icon {
+            viewport = viewport.with_icon(icon_data);
+        }
 
         if mode == thoth::gui::GuiMode::Prompt {
             viewport = viewport.with_always_on_top();
