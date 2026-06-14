@@ -57,6 +57,17 @@ fn contains_sensitive_data(text: &str) -> bool {
         regex::Regex::new(r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+").unwrap(),
         regex::Regex::new(r"-----BEGIN.*PRIVATE KEY-----").unwrap(),
         regex::Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
+        // AWS Access Key ID
+        regex::Regex::new(r"(?i)AKIA[A-Z0-9]{16}").unwrap(),
+        // GitHub Tokens
+        regex::Regex::new(r"gh[pousr]_[a-zA-Z0-9]{36,255}").unwrap(),
+        // Slack Tokens
+        regex::Regex::new(r"xox[bp]-[a-zA-Z0-9-]{10,}").unwrap(),
+        regex::Regex::new(r"(?i)slack").unwrap(),
+        // Database URIs
+        regex::Regex::new(r"(?i)mongodb://").unwrap(),
+        regex::Regex::new(r"(?i)postgres(ql)?://").unwrap(),
+        regex::Regex::new(r"(?i)mysql://").unwrap(),
     ];
     patterns.iter().any(|re| re.is_match(text))
 }
@@ -83,10 +94,24 @@ impl PylosClient {
             config.endpoint.pop();
         }
 
-        let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
-            .build()
-            .expect("reqwest client");
+        let insecure = crate::is_insecure();
+        let is_local =
+            config.endpoint.contains("localhost") || config.endpoint.contains("127.0.0.1");
+
+        if !insecure && !is_local && !config.endpoint.starts_with("https://") {
+            config.endpoint = config.endpoint.replace("http://", "https://");
+            if !config.endpoint.starts_with("https://") {
+                config.endpoint = format!("https://{}", config.endpoint);
+            }
+        }
+
+        let mut builder = Client::builder().timeout(Duration::from_secs(config.timeout_secs));
+
+        if insecure {
+            builder = builder.danger_accept_invalid_certs(true);
+        }
+
+        let client = builder.build().expect("reqwest client");
         Self {
             client,
             config,

@@ -84,44 +84,89 @@ if ($Release) {
     $binaryPath = "target\debug\thoth.exe"
 }
 
-# --- Outils de la CI (executes si installes en local) ---
+# Signature du binaire avec un certificat auto-signé pour passer la validation de signature au démarrage
+if (Test-Path $binaryPath) {
+    Write-Host "Signature du binaire avec un certificat auto-signé..." -ForegroundColor Yellow
+    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=ThothCodeSign" } | Select-Object -First 1
+    if (-not $cert) {
+        $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothCodeSign" -CertStoreLocation Cert:\CurrentUser\My
+        $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+        $tempCertPath = [System.IO.Path]::GetTempFileName()
+        [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
+        # Import dans Trusted Root pour valider la confiance de la signature
+        Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
+        Remove-Item $tempCertPath
+    }
+    Set-AuthenticodeSignature -FilePath $binaryPath -Certificate $cert | Out-Null
+    Write-Host "[OK] Signature de thoth.exe effectuée`n" -ForegroundColor Green
+}
 
+# --- Outils de la CI (executes et installes si manquants) ---
+
+if (-not (Get-Command actionlint -ErrorAction SilentlyContinue)) {
+    Write-Host "actionlint non installé. Installation via go install..." -ForegroundColor Yellow
+    go install github.com/rhysd/actionlint/cmd/actionlint@latest
+}
 if (Get-Command actionlint -ErrorAction SilentlyContinue) {
     Check-Command "actionlint" { actionlint }
 } else {
-    Write-Host "[WARN] actionlint non installe - saute (go install github.com/rhysd/actionlint/cmd/actionlint@latest)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer actionlint`n" -ForegroundColor Red
 }
 
+if (-not (Get-Command typos -ErrorAction SilentlyContinue)) {
+    Write-Host "typos non installé. Installation via cargo install..." -ForegroundColor Yellow
+    cargo install typos-cli
+}
 if (Get-Command typos -ErrorAction SilentlyContinue) {
     Check-Command "typos" { typos }
 } else {
-    Write-Host "[WARN] typos non installe - saute (cargo install typos-cli)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer typos`n" -ForegroundColor Red
 }
 
+if (-not (Get-Command cargo-deny -ErrorAction SilentlyContinue)) {
+    Write-Host "cargo-deny non installé. Installation via cargo install..." -ForegroundColor Yellow
+    cargo install --locked cargo-deny
+}
 if (Get-Command cargo-deny -ErrorAction SilentlyContinue) {
     Check-Command "cargo deny" { cargo deny check }
 } else {
-    Write-Host "[WARN] cargo-deny non installe - saute (cargo install --locked cargo-deny)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer cargo-deny`n" -ForegroundColor Red
 }
 
 # --- Autres outils locaux ---
 
+if (-not (Get-Command cargo-outdated -ErrorAction SilentlyContinue)) {
+    Write-Host "cargo-outdated non installé. Installation via cargo install..." -ForegroundColor Yellow
+    cargo install cargo-outdated
+}
 if (Get-Command cargo-outdated -ErrorAction SilentlyContinue) {
     Check-Command "cargo outdated" { cargo outdated }
 } else {
-    Write-Host "[WARN] cargo-outdated non installe - saute (cargo install cargo-outdated)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer cargo-outdated`n" -ForegroundColor Red
 }
 
+if (-not (Get-Command cargo-audit -ErrorAction SilentlyContinue)) {
+    Write-Host "cargo-audit non installé. Installation via cargo install..." -ForegroundColor Yellow
+    cargo install cargo-audit
+}
 if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
     Check-Command "cargo audit" { cargo audit }
 } else {
-    Write-Host "[WARN] cargo-audit non installe - saute (cargo install cargo-audit)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer cargo-audit`n" -ForegroundColor Red
 }
 
+if (-not (Get-Command cargo-udeps -ErrorAction SilentlyContinue)) {
+    Write-Host "cargo-udeps non installé. Installation via cargo install..." -ForegroundColor Yellow
+    cargo install cargo-udeps
+}
 if (Get-Command cargo-udeps -ErrorAction SilentlyContinue) {
+    if (-not (rustup toolchain list | Select-String "nightly")) {
+        Write-Host "Toolchain nightly non installée. Installation via rustup..." -ForegroundColor Yellow
+        rustup toolchain install nightly --profile minimal
+    }
     Check-Command "cargo udeps" { cargo +nightly udeps --all-targets }
 } else {
-    Write-Host "[WARN] cargo-udeps non installe - saute (cargo install cargo-udeps)`n" -ForegroundColor Yellow
+    Write-Host "[FAIL] Impossible d'installer ou de lancer cargo-udeps`n" -ForegroundColor Red
 }
 
 # --- Resume ---
