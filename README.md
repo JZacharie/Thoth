@@ -1,5 +1,9 @@
 # 🦉 Thoth
 
+<p align="center">
+  <img src="docs/images/hero-banner.png" alt="Thoth — Instant LLM text manipulation for Windows" width="100%">
+</p>
+
 > **Instant LLM-powered text manipulation for Windows — translate, reformulate, or execute custom prompts via global hotkeys.**  
 > **Manipulation de texte instantanée par LLM pour Windows — traduire, reformuler ou exécuter des instructions personnalisées via des raccourcis globaux.**
 
@@ -20,6 +24,14 @@
 - **Prompt GUI** — executes custom user instruction on selected text, with history persistence (up/down arrows + click selection), saved in Windows Registry
 - **Config Editor** — edit all settings directly in-app (endpoint, model, hotkey, language, etc.)
 - **Statistics Dashboard** — view translations count, errors, volume processed, average latency, per-model usage
+
+<p align="center">
+  <img src="docs/images/prompt-gui.png" alt="Thoth Prompt GUI" width="45%">&nbsp;&nbsp;
+  <img src="docs/images/config-editor.png" alt="Thoth Config Editor" width="45%">
+</p>
+<p align="center">
+  <em>Left: Custom Instruction overlay &nbsp;|&nbsp; Right: Configuration Editor</em>
+</p>
 
 #### Security
 - **DPAPI-Encrypted Configuration** — config is encrypted with Windows `CryptProtectData` and stored in `HKCU\Software\Thoth\Config` (REG_BINARY); no plaintext files on disk
@@ -106,6 +118,13 @@ sequenceDiagram
 │                   └──────────────────────────────────────┘        │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+<p align="center">
+  <img src="docs/images/stats-dashboard.png" alt="Thoth Statistics Dashboard" width="60%">
+</p>
+<p align="center">
+  <em>Statistics Dashboard — usage metrics, latency and per-model breakdown</em>
+</p>
 
 ### Prerequisites
 
@@ -251,6 +270,14 @@ MIT — see [LICENSE](LICENSE).
 - **Console Instruction** — exécute une instruction personnalisée sur le texte sélectionné, avec historique persistant (navigation flèches haut/bas + clic), sauvegardé dans le registre Windows
 - **Éditeur de Configuration** — modifiez tous les paramètres directement dans l'application
 - **Tableau de Bord Statistiques** — traductions, erreurs, volume, latence, usage par modèle
+
+<p align="center">
+  <img src="docs/images/prompt-gui.png" alt="Console d'instruction Thoth" width="45%">&nbsp;&nbsp;
+  <img src="docs/images/config-editor.png" alt="Éditeur de configuration Thoth" width="45%">
+</p>
+<p align="center">
+  <em>Gauche : Console d'instruction &nbsp;|&nbsp; Droite : Éditeur de configuration</em>
+</p>
 
 #### Sécurité
 - **Configuration Chiffrée (DPAPI)** — config chiffrée via `CryptProtectData` dans `HKCU\Software\Thoth\Config` (REG_BINARY) ; plus aucun fichier en clair sur le disque
