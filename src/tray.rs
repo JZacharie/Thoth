@@ -107,15 +107,30 @@ mod platform {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit_item)?;
 
-        let icon = Icon::from_resource(1, Some((32, 32))).ok();
+        // Charge thoth.png depuis les ressources intégrées
+        let png_bytes = include_bytes!("../resources/thoth.png");
+        let decoded = image::load_from_memory_with_format(png_bytes, image::ImageFormat::Png)?;
+        let rgba_img = decoded.to_rgba8();
+        let (width, height) = rgba_img.dimensions();
+        let color_icon = Icon::from_rgba(rgba_img.clone().into_raw(), width, height)?;
+
+        // Génère la version noir et blanc (grayscale) de l'image
+        let grayscale_decoded = image::DynamicImage::ImageRgba8(rgba_img).grayscale();
+        let grayscale_rgba = grayscale_decoded.to_rgba8();
+        let grayscale_icon = Icon::from_rgba(grayscale_rgba.into_raw(), width, height)?;
+
+        let initial_enabled = enabled.load(Ordering::Relaxed);
 
         let mut builder = TrayIconBuilder::new()
             .with_tooltip(s.tooltip)
             .with_menu(Box::new(menu));
-        if let Some(ico) = icon {
-            builder = builder.with_icon(ico);
+
+        if initial_enabled {
+            builder = builder.with_icon(color_icon.clone());
+        } else {
+            builder = builder.with_icon(grayscale_icon.clone());
         }
-        let _tray = builder.build()?;
+        let tray = builder.build()?;
 
         let mut shutdown_tx = Some(shutdown_tx);
 
@@ -150,6 +165,11 @@ mod platform {
                         } else {
                             s.status_disabled
                         });
+                        if new_state {
+                            let _ = tray.set_icon(Some(color_icon.clone()));
+                        } else {
+                            let _ = tray.set_icon(Some(grayscale_icon.clone()));
+                        }
                     } else if event.id == auto_start_item.id() {
                         let new_state = !auto_start::is_enabled();
                         if new_state {
