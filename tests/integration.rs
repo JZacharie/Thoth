@@ -126,3 +126,32 @@ fn test_hotkey_pattern_parse() {
     );
     assert_eq!(h.key, thoth::HotkeyKey::Letter('t'));
 }
+
+#[tokio::test]
+async fn test_pylos_reformulate_success() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": "Texte clarifié"
+                }
+            }]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = thoth::PylosConfig {
+        endpoint: mock_server.uri(),
+        model: "gemma4:12b".into(),
+        fallback_model: None,
+        timeout_secs: 5,
+        secret: "test-secret".into(),
+    };
+
+    let client = thoth::PylosClient::new(config, "fr".into());
+    let result = client.reformulate("Quelque texte").await.unwrap();
+    assert_eq!(result, "Texte clarifié");
+}

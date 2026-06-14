@@ -15,6 +15,7 @@ pub enum HotkeyAction {
     TranslateDefault,
     TranslateEnglish,
     ExecuteInstruction,
+    Reformulate,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,6 +140,10 @@ mod platform {
         let fs_instruction = get_win32_modifiers(&pat_instruction.modifiers);
         let vk_instruction = get_win32_vk(&pat_instruction.key);
 
+        let pat_reformulate = HotkeyPattern::parse("Ctrl+Shift+Win+R").unwrap();
+        let fs_reformulate = get_win32_modifiers(&pat_reformulate.modifiers);
+        let vk_reformulate = get_win32_vk(&pat_reformulate.key);
+
         std::thread::spawn(move || {
             unsafe extern "system" {
                 fn RegisterHotKey(
@@ -177,7 +182,21 @@ mod platform {
                     UnregisterHotKey(std::ptr::null_mut(), 2);
                     return;
                 }
-                tracing::info!("RegisterHotKey: all three global hotkeys registered successfully");
+                if RegisterHotKey(
+                    std::ptr::null_mut(),
+                    4,
+                    fs_reformulate | 0x4000,
+                    vk_reformulate,
+                ) == 0
+                {
+                    let err = GetLastError();
+                    tracing::error!("RegisterHotKey (Reformulate) failed with error code: {err}");
+                    UnregisterHotKey(std::ptr::null_mut(), 1);
+                    UnregisterHotKey(std::ptr::null_mut(), 2);
+                    UnregisterHotKey(std::ptr::null_mut(), 3);
+                    return;
+                }
+                tracing::info!("RegisterHotKey: all four global hotkeys registered successfully");
 
                 let mut msg = std::mem::zeroed::<MSG>();
                 while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) != 0 {
@@ -186,6 +205,7 @@ mod platform {
                             1 => super::HotkeyAction::TranslateDefault,
                             2 => super::HotkeyAction::TranslateEnglish,
                             3 => super::HotkeyAction::ExecuteInstruction,
+                            4 => super::HotkeyAction::Reformulate,
                             _ => continue,
                         };
                         tracing::info!("RegisterHotKey: hotkey triggered for action {:?}", action);
@@ -200,6 +220,7 @@ mod platform {
                 UnregisterHotKey(std::ptr::null_mut(), 1);
                 UnregisterHotKey(std::ptr::null_mut(), 2);
                 UnregisterHotKey(std::ptr::null_mut(), 3);
+                UnregisterHotKey(std::ptr::null_mut(), 4);
             }
         });
 

@@ -357,6 +357,87 @@ impl PylosClient {
         Ok(content)
     }
 
+    fn build_reformulate_prompt(&self) -> String {
+        "Tu es un rédacteur et communicant d'exception spécialisé dans la clarification textuelle.\n\
+         Ton objectif est de reformuler, clarifier les idées et restructurer le texte fourni pour le rendre extrêmement fluide, compréhensible et percutant, tout en préservant fidèlement son sens d'origine.\n\
+         Règles strictes :\n\
+         - Améliore le style, élimine les redondances et structure les arguments logiquement.\n\
+         - Conserve le même niveau de langue (ou rends-le professionnel si familier).\n\
+         - Retourne UNIQUEMENT le texte reformulé final.\n\
+         - Ne commence JAMAIS par des formules de politesse, des introductions, ou des commentaires sur les changements apportés.\n\
+         - Ne mets aucun guillemet ni bloc de code markdown autour de ton texte.".to_string()
+    }
+
+    pub async fn reformulate(&self, text: &str) -> Result<String> {
+        let system_prompt = self.build_reformulate_prompt();
+        let request = ChatRequest {
+            model: self.config.model.clone(),
+            messages: vec![
+                Message {
+                    role: "system".into(),
+                    content: system_prompt.clone(),
+                },
+                Message {
+                    role: "user".into(),
+                    content: text.into(),
+                },
+            ],
+        };
+
+        let result = self
+            .client
+            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
+            .header("Authorization", format!("Bearer {}", self.config.secret))
+            .json(&request)
+            .send()
+            .await?
+            .error_for_status();
+
+        let response = match result {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!("primary model failed on reformulate: {e}, trying fallback");
+                match &self.config.fallback_model {
+                    Some(fallback) => {
+                        let request_fallback = ChatRequest {
+                            model: fallback.clone(),
+                            messages: vec![
+                                Message {
+                                    role: "system".into(),
+                                    content: system_prompt,
+                                },
+                                Message {
+                                    role: "user".into(),
+                                    content: text.into(),
+                                },
+                            ],
+                        };
+                        self.client
+                            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+                            .header("X-Thoth-Secret", &self.config.secret)
+                            .header("Authorization", format!("Bearer {}", self.config.secret))
+                            .json(&request_fallback)
+                            .send()
+                            .await?
+                            .error_for_status()?
+                    }
+                    None => return Err(e.into()),
+                }
+            }
+        };
+
+        let body: ChatResponse = response.json().await?;
+        let content = body
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default();
+
+        Ok(content)
+    }
+
     pub async fn translate(&self, text: &str) -> Result<String> {
         self.translate_to(text, &self.target_language).await
     }

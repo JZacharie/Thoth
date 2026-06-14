@@ -111,6 +111,48 @@ impl Orchestrator {
 
             let translated = match action {
                 HotkeyAction::ExecuteInstruction => unreachable!(),
+                HotkeyAction::Reformulate => {
+                    tracing::info!(
+                        "orchestrator: reformulating text (len: {}, hash: {:x})",
+                        original_text.len(),
+                        {
+                            use std::collections::hash_map::DefaultHasher;
+                            use std::hash::{Hash, Hasher};
+                            let mut s = DefaultHasher::new();
+                            original_text.hash(&mut s);
+                            s.finish()
+                        }
+                    );
+
+                    match self.pylos.reformulate(&original_text).await {
+                        Ok(t) => {
+                            tracing::info!(
+                                "orchestrator: reformulation successful (len: {}, hash: {:x})",
+                                t.len(),
+                                {
+                                    use std::collections::hash_map::DefaultHasher;
+                                    use std::hash::{Hash, Hasher};
+                                    let mut s = DefaultHasher::new();
+                                    t.hash(&mut s);
+                                    s.finish()
+                                }
+                            );
+                            t
+                        }
+                        Err(e) => {
+                            tracing::error!("pylos request failed on reformulate: {e}");
+                            self.metrics.record_error();
+                            self.metrics.save();
+                            notification::notify_error(
+                                "Pylos introuvable — vérifiez qu'il est en cours d'exécution",
+                            );
+                            if let Err(e) = self.clipboard.restore() {
+                                tracing::error!("clipboard restore failed: {e}");
+                            }
+                            continue;
+                        }
+                    }
+                }
                 _ => {
                     let target_lang = match action {
                         HotkeyAction::TranslateDefault => &self.default_target_language,
