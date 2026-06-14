@@ -266,6 +266,66 @@ impl PylosClient {
         }
     }
 
+    pub async fn execute_with_custom_prompt(
+        &self,
+        user_prompt: &str,
+        text: &str,
+    ) -> Result<String> {
+        let full_message = format!("{}\n\n{}", user_prompt, text);
+        let request = ChatRequest {
+            model: self.config.model.clone(),
+            messages: vec![Message {
+                role: "user".into(),
+                content: full_message,
+            }],
+        };
+
+        let result = self
+            .client
+            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
+            .json(&request)
+            .send()
+            .await?
+            .error_for_status();
+
+        let response = match result {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!("primary model failed on custom prompt: {e}, trying fallback");
+                match &self.config.fallback_model {
+                    Some(fallback) => {
+                        let request_fallback = ChatRequest {
+                            model: fallback.clone(),
+                            messages: vec![Message {
+                                role: "user".into(),
+                                content: format!("{}\n\n{}", user_prompt, text),
+                            }],
+                        };
+                        self.client
+                            .post(format!("{}/v1/chat/completions", self.config.endpoint))
+                            .header("X-Thoth-Secret", &self.config.secret)
+                            .json(&request_fallback)
+                            .send()
+                            .await?
+                            .error_for_status()?
+                    }
+                    None => return Err(e.into()),
+                }
+            }
+        };
+
+        let body: ChatResponse = response.json().await?;
+        let content = body
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default();
+
+        Ok(content)
+    }
+
     pub async fn translate(&self, text: &str) -> Result<String> {
         self.translate_to(text, &self.target_language).await
     }
