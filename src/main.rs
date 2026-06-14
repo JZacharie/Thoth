@@ -8,8 +8,61 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
+#[cfg(windows)]
+fn show_crash_dialog(message: &str, log_path: &std::path::Path) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    let title: Vec<u16> = OsStr::new("Thoth — Erreur critique\0")
+        .encode_wide()
+        .collect();
+    let body_str = format!(
+        "{}\n\nUn fichier de log a été enregistré à : {}\n\nVoulez-vous ouvrir le fichier de log ?",
+        message,
+        log_path.display()
+    );
+    let body: Vec<u16> = OsStr::new(&format!("{}\0", body_str))
+        .encode_wide()
+        .collect();
+
+    unsafe {
+        let result = windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
+            std::ptr::null_mut(),
+            body.as_ptr(),
+            title.as_ptr(),
+            windows_sys::Win32::UI::WindowsAndMessaging::MB_YESNO
+                | windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR,
+        );
+        if result == windows_sys::Win32::UI::WindowsAndMessaging::IDYES {
+            let _ = std::process::Command::new("notepad.exe")
+                .arg(log_path)
+                .spawn();
+        }
+    }
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    let result = main_inner().await;
+    if let Err(ref e) = result {
+        tracing::error!("Fatal error: {:?}", e);
+        let config = Config::load().unwrap_or_default();
+        let log_file = if let Some(ref path_str) = config.behavior.log_path {
+            PathBuf::from(path_str)
+        } else {
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(PathBuf::from))
+                .unwrap_or_else(|| PathBuf::from("."));
+            exe_dir.join("thoth.log")
+        };
+        #[cfg(windows)]
+        show_crash_dialog(&format!("Erreur fatale : {}", e), &log_file);
+        std::process::exit(1);
+    }
+}
+
+async fn main_inner() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let is_insecure = args.iter().any(|arg| arg == "--insecure");
     thoth::set_insecure(is_insecure);
@@ -112,6 +165,26 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_writer(non_blocking)
         .init();
+
+    let log_file_for_panic = log_file.clone();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "Unknown panic payload"
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let msg = format!("Panic occurred at {}: {}", location, payload);
+        tracing::error!("{}", msg);
+
+        #[cfg(windows)]
+        show_crash_dialog(&msg, &log_file_for_panic);
+    }));
 
     tracing::info!("Thoth v{} starting", env!("CARGO_PKG_VERSION"));
 

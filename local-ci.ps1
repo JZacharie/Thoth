@@ -44,10 +44,10 @@ function Check-Command {
 
     if ($status) {
         Write-Host "[OK] $Name passed`n" -ForegroundColor Green
-        $global:PASS++
+        $script:PASS++
     } else {
         Write-Host "[FAIL] $Name failed`n" -ForegroundColor Red
-        $global:FAIL++
+        $script:FAIL++
     }
     # Reset exit code pour la prochaine commande
     $global:LASTEXITCODE = $null

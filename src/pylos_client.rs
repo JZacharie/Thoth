@@ -156,6 +156,7 @@ impl PylosClient {
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
             .header("X-Thoth-Secret", &self.config.secret)
+            .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
             .await?
@@ -186,6 +187,7 @@ impl PylosClient {
             .client
             .get(&url)
             .header("X-Thoth-Secret", &self.config.secret)
+            .header("Authorization", format!("Bearer {}", self.config.secret))
             .send()
             .await?
             .error_for_status()?;
@@ -220,6 +222,7 @@ impl PylosClient {
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
             .header("X-Thoth-Secret", &self.config.secret)
+            .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
             .await?
@@ -247,6 +250,7 @@ impl PylosClient {
                         self.client
                             .post(format!("{}/v1/chat/completions", self.config.endpoint))
                             .header("X-Thoth-Secret", &self.config.secret)
+                            .header("Authorization", format!("Bearer {}", self.config.secret))
                             .json(&request_fallback)
                             .send()
                             .await?
@@ -309,6 +313,7 @@ impl PylosClient {
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
             .header("X-Thoth-Secret", &self.config.secret)
+            .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
             .await?
@@ -330,6 +335,7 @@ impl PylosClient {
                         self.client
                             .post(format!("{}/v1/chat/completions", self.config.endpoint))
                             .header("X-Thoth-Secret", &self.config.secret)
+                            .header("Authorization", format!("Bearer {}", self.config.secret))
                             .json(&request_fallback)
                             .send()
                             .await?
