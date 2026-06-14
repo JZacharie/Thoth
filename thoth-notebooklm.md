@@ -58,8 +58,8 @@ Thoth est entièrement écrit en **Rust** (édition 2024), avec une version mini
 │  ┌────────────┐   ┌──────────────┐   ┌───────────────────┐       │
 │  │  Hotkey    │──▶│ Orchestrateur│──▶│ Client Pylos      │──▶     │
 │  │  Listener  │   │ (boucle      │   │ (reqwest, HTTPS)  │  POST  │
-│  │ (RegisterH │   │  principale) │   └───────────────────┘        │
-│  │   otKey)   │   │              │           │                    │
+│  │ (Register  │   │  principale) │   └───────────────────┘        │
+│  │  HotKey)   │   │              │           │                    │
 │  └────────────┘   │  ┌─────────┐ │           ▼                    │
 │                   │  │Presse-  │ │    ┌──────────────┐            │
 │  ┌────────────┐   │  │papier   │ │    │ Passerelle   │──▶▶ LLM   │
