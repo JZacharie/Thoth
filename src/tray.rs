@@ -107,7 +107,7 @@ mod platform {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit_item)?;
 
-        // Charge thoth.png depuis les ressources intégrées
+        // Load thoth.png from embedded resources
         let png_bytes = include_bytes!("../resources/thoth.png");
         let decoded = image::load_from_memory_with_format(png_bytes, image::ImageFormat::Png)?;
         let rgba_img = decoded.to_rgba8();
