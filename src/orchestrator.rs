@@ -107,16 +107,32 @@ impl Orchestrator {
                         "orchestrator: executing instruction on text: {:?}",
                         original_text
                     );
-                    match self.pylos.execute_instruction(&original_text).await {
+
+                    let user_prompt = match crate::dialog::show_prompt_dialog() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            tracing::info!("prompt dialog cancelled or failed: {e}");
+                            if let Err(e) = self.clipboard.restore() {
+                                tracing::error!("clipboard restore failed: {e}");
+                            }
+                            continue;
+                        }
+                    };
+
+                    match self
+                        .pylos
+                        .execute_with_custom_prompt(&user_prompt, &original_text)
+                        .await
+                    {
                         Ok(t) => {
                             tracing::info!(
-                                "orchestrator: instruction execution successful: {:?}",
+                                "orchestrator: custom instruction execution successful: {:?}",
                                 t
                             );
                             t
                         }
                         Err(e) => {
-                            tracing::error!("pylos instruction execution failed: {e}");
+                            tracing::error!("pylos custom instruction execution failed: {e}");
                             self.metrics.record_error();
                             self.metrics.save();
                             notification::notify_error(
