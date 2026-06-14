@@ -19,7 +19,7 @@ regex = "1"
 tracing-appender = "0.2"
 time = "=0.3.36"
 sys-locale = "0.3"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.24", default-features = false, features = ["png"] }
 
 [package.metadata.cargo-udeps.ignore]
 development = []
