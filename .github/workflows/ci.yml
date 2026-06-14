@@ -85,16 +85,16 @@ jobs:
 
   # ── Vérification MSRV ────────────────────────────────────────
   msrv:
-    name: MSRV (1.85.0)
+    name: MSRV (1.88.0)
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rust (1.85.0)
+      - name: Install Rust (1.88.0)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85.0
+          toolchain: 1.88.0
 
       - name: sccache
         uses: mozilla-actions/sccache-action@v0.0.10

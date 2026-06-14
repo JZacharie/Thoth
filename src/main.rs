@@ -68,7 +68,7 @@ async fn main_inner() -> anyhow::Result<()> {
     thoth::set_insecure(is_insecure);
     let is_gui = args
         .iter()
-        .any(|arg| arg == "--prompt" || arg == "--config");
+        .any(|arg| arg == "--prompt" || arg == "--config" || arg == "--stats");
 
     #[cfg(windows)]
     {
@@ -114,6 +114,8 @@ async fn main_inner() -> anyhow::Result<()> {
     if is_gui {
         let mode = if args.iter().any(|arg| arg == "--config") {
             thoth::gui::GuiMode::Config
+        } else if args.iter().any(|arg| arg == "--stats") {
+            thoth::gui::GuiMode::Stats
         } else {
             thoth::gui::GuiMode::Prompt
         };
@@ -122,6 +124,8 @@ async fn main_inner() -> anyhow::Result<()> {
         let mut viewport = eframe::egui::ViewportBuilder::default()
             .with_inner_size(if mode == thoth::gui::GuiMode::Config {
                 eframe::egui::vec2(450.0, 500.0)
+            } else if mode == thoth::gui::GuiMode::Stats {
+                eframe::egui::vec2(450.0, 350.0)
             } else {
                 eframe::egui::vec2(450.0, 300.0)
             })

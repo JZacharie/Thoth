@@ -26,10 +26,6 @@ mod platform {
         config: &'static str,
         stats: &'static str,
         reset_stats: &'static str,
-        stats_translations: &'static str,
-        stats_errors: &'static str,
-        stats_latency: &'static str,
-        stats_models: &'static str,
         logs: &'static str,
         quit: &'static str,
         tooltip: &'static str,
@@ -46,10 +42,6 @@ mod platform {
                 config: "Configuration",
                 stats: "Statistiques",
                 reset_stats: "Réinitialiser les stats",
-                stats_translations: "Traductions",
-                stats_errors: "Erreurs",
-                stats_latency: "Latence moy.",
-                stats_models: "Modèles",
                 logs: "Journaux",
                 quit: "Quitter",
                 tooltip: "Thoth — Traducteur instantané",
@@ -63,10 +55,6 @@ mod platform {
                 config: "Configuration",
                 stats: "Statistics",
                 reset_stats: "Reset statistics",
-                stats_translations: "Translations",
-                stats_errors: "Errors",
-                stats_latency: "Avg. latency",
-                stats_models: "Models",
                 logs: "Logs",
                 quit: "Quit",
                 tooltip: "Thoth — Instant translator",
@@ -183,26 +171,9 @@ mod platform {
                             let _ = std::process::Command::new(exe_path).arg("--config").spawn();
                         }
                     } else if event.id == stats_item.id() {
-                        let s = menu_strings();
-                        let metrics = UsageMetrics::load();
-                        let models = metrics
-                            .model_usage
-                            .iter()
-                            .map(|(m, c)| format!("{m}: {c}"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        let msg = format!(
-                            "{}: {}\n{}: {}\n{}: {:.0} ms\n{}: {}",
-                            s.stats_translations,
-                            metrics.total_translations,
-                            s.stats_errors,
-                            metrics.total_errors,
-                            s.stats_latency,
-                            metrics.avg_latency_ms(),
-                            s.stats_models,
-                            models,
-                        );
-                        tracing::info!("Stats:\n{}", msg);
+                        if let Ok(exe_path) = std::env::current_exe() {
+                            let _ = std::process::Command::new(exe_path).arg("--stats").spawn();
+                        }
                     } else if event.id == reset_stats_item.id() {
                         UsageMetrics::default().save();
                         tracing::info!("stats reset");

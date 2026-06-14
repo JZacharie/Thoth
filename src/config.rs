@@ -27,11 +27,11 @@ pub struct PylosConfig {
 impl Default for PylosConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://localhost:11434".into(),
-            model: "gemma4:12b".into(),
-            fallback_model: Some("gemini4:12b".into()),
+            endpoint: "https://pylos-dev.p.zacharie.org".into(),
+            model: "gemini4:e2b".into(),
+            fallback_model: Some("gemma4:12b".into()),
             timeout_secs: 30,
-            secret: String::new(),
+            secret: "your_secret_key_here".into(),
         }
     }
 }
@@ -266,10 +266,11 @@ mod tests {
     #[test]
     fn test_pylos_default() {
         let cfg = PylosConfig::default();
-        assert_eq!(cfg.endpoint, "http://localhost:11434");
-        assert_eq!(cfg.model, "gemma4:12b");
-        assert_eq!(cfg.fallback_model, Some("gemini4:12b".into()));
+        assert_eq!(cfg.endpoint, "https://pylos-dev.p.zacharie.org");
+        assert_eq!(cfg.model, "gemini4:e2b");
+        assert_eq!(cfg.fallback_model, Some("gemma4:12b".into()));
         assert_eq!(cfg.timeout_secs, 30);
+        assert_eq!(cfg.secret, "your_secret_key_here");
     }
 
     #[test]
@@ -288,7 +289,7 @@ mod tests {
     fn test_config_default() {
         let cfg = Config::default();
         let sys = system_language();
-        assert_eq!(cfg.pylos.model, "gemma4:12b");
+        assert_eq!(cfg.pylos.model, "gemini4:e2b");
         assert_eq!(cfg.behavior.target_language, sys);
     }
 
