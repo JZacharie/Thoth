@@ -59,6 +59,14 @@ impl Orchestrator {
 
             tracing::info!("orchestrator: hotkey event received: {:?}", action);
 
+            if action == HotkeyAction::ExecuteInstruction {
+                tracing::info!("orchestrator: spawning prompt GUI");
+                if let Ok(exe_path) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe_path).arg("--prompt").spawn();
+                }
+                continue;
+            }
+
             #[cfg(windows)]
             let active_window =
                 unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
@@ -102,49 +110,7 @@ impl Orchestrator {
             }
 
             let translated = match action {
-                HotkeyAction::ExecuteInstruction => {
-                    tracing::info!(
-                        "orchestrator: executing instruction on text: {:?}",
-                        original_text
-                    );
-
-                    let user_prompt = match crate::dialog::show_prompt_dialog() {
-                        Ok(p) => p,
-                        Err(e) => {
-                            tracing::info!("prompt dialog cancelled or failed: {e}");
-                            if let Err(e) = self.clipboard.restore() {
-                                tracing::error!("clipboard restore failed: {e}");
-                            }
-                            continue;
-                        }
-                    };
-
-                    match self
-                        .pylos
-                        .execute_with_custom_prompt(&user_prompt, &original_text)
-                        .await
-                    {
-                        Ok(t) => {
-                            tracing::info!(
-                                "orchestrator: custom instruction execution successful: {:?}",
-                                t
-                            );
-                            t
-                        }
-                        Err(e) => {
-                            tracing::error!("pylos custom instruction execution failed: {e}");
-                            self.metrics.record_error();
-                            self.metrics.save();
-                            notification::notify_error(
-                                "Pylos introuvable — vérifiez qu'il est en cours d'exécution",
-                            );
-                            if let Err(e) = self.clipboard.restore() {
-                                tracing::error!("clipboard restore failed: {e}");
-                            }
-                            continue;
-                        }
-                    }
-                }
+                HotkeyAction::ExecuteInstruction => unreachable!(),
                 _ => {
                     let target_lang = match action {
                         HotkeyAction::TranslateDefault => &self.default_target_language,

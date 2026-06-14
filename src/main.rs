@@ -10,27 +10,64 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let current_pid = std::process::id();
-        let _ = std::process::Command::new("taskkill")
-            .args([
-                "/F",
-                "/FI",
-                &format!("PID ne {}", current_pid),
-                "/IM",
-                "thoth.exe",
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .status();
-        // Give a brief moment for the OS to release the hotkey and file handles
-        std::thread::sleep(std::time::Duration::from_millis(200));
+    let args: Vec<String> = std::env::args().collect();
+    let is_gui = args
+        .iter()
+        .any(|arg| arg == "--prompt" || arg == "--config");
+
+    if !is_gui {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let current_pid = std::process::id();
+            let _ = std::process::Command::new("taskkill")
+                .args([
+                    "/F",
+                    "/FI",
+                    &format!("PID ne {}", current_pid),
+                    "/IM",
+                    "thoth.exe",
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .status();
+            // Give a brief moment for the OS to release the hotkey and file handles
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
     }
 
     let config = Config::load().unwrap_or_default();
+
+    if is_gui {
+        let mode = if args.iter().any(|arg| arg == "--config") {
+            thoth::gui::GuiMode::Config
+        } else {
+            thoth::gui::GuiMode::Prompt
+        };
+
+        let mut options = eframe::NativeOptions::default();
+        let mut viewport = eframe::egui::ViewportBuilder::default()
+            .with_inner_size(if mode == thoth::gui::GuiMode::Config {
+                eframe::egui::vec2(450.0, 500.0)
+            } else {
+                eframe::egui::vec2(450.0, 300.0)
+            })
+            .with_resizable(true);
+
+        if mode == thoth::gui::GuiMode::Prompt {
+            viewport = viewport.with_always_on_top();
+        }
+        options.viewport = viewport;
+
+        eframe::run_native(
+            "Thoth",
+            options,
+            Box::new(move |_cc| Ok(Box::new(thoth::gui::ThothGuiApp::new(mode, config)))),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to run eframe: {:?}", e))?;
+        return Ok(());
+    }
 
     let log_file = if let Some(ref path_str) = config.behavior.log_path {
         PathBuf::from(path_str)
