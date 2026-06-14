@@ -126,3 +126,86 @@ La compilation et la publication de Thoth sont automatisées via GitHub Actions 
 *   **macOS :** Compilation pour architectures x86_64 et Apple Silicon (aarch64) avec signature de code d'application Apple.
 *   **Linux :** Génération d'exécutables et de paquets de distribution standard (`.deb` / `tar.gz`).
 *   **Contrôle qualité :** Lancement systématique de `cargo test`, `clippy`, `cargo-deny`, `typos` et du scan de fuite de secrets **GitLeaks**.
+
+---
+
+## Plan d'action stratégique (Mois 1 - 7)
+
+Pour mener à bien ce projet, le secret réside dans une approche **itérative et modulaire**. L'architecture doit séparer strictement l'intelligence (le moteur LLM et la logique métier) des spécificités graphiques de chaque OS.
+
+Voici le plan d'action stratégique, découpé en 5 phases majeures, pour passer du concept à un outil de production performant.
+
+---
+
+### Phase 1 : Architecture & Cœur Mutualisé (Mois 1 - 2)
+
+L'objectif est de bâtir les fondations techniques de l'application sans encore toucher à l'interface graphique.
+
+*   **Choix de la pile technique :**
+    *   **Core Logic :** Développement en **Rust**. C’est le choix idéal pour un outil système : empreinte mémoire minimale (< 50 Mo), sécurité des threads, et interopérabilité parfaite avec les APIs natives via C-bindings.
+    *   **Moteur LLM & Routage :** Intégration d'un client API double (Local via un modèle léger comme *Llama-3-8B* via `llama.cpp` / *Ollama* pour la confidentialité, et distant via des APIs cloud pour les analyses complexes).
+*   **Développement du Core Engine :**
+    *   Mise en place de la gestion du cache des traductions/explications (PostgreSQL en local ou SQLite ultra-léger) pour éviter de requêter le LLM deux fois pour la même phrase.
+    *   Création des algorithmes de traitement de texte (nettoyage des chaînes issues de l'OCR, détection des blocs de code).
+    *   Création du système de binding (FFI) pour permettre aux futurs *frontends* de communiquer avec ce cœur en Rust.
+
+---
+
+### Phase 2 : R&D "OS Gateways" & Capture Contextuelle (Mois 3)
+
+Cette phase valide la faisabilité technique de la capture passive sur chaque plateforme.
+
+*   **Implémentation des briques de capture de texte/OCR :**
+    *   **macOS :** Intégration du framework natif *Vision* pour l'OCR et des APIs d'accessibilité (`AXUIElement`).
+    *   **Windows :** Implémentation de *Windows.Media.Ocr* et de l'arbre *UI Automation*.
+    *   **Linux :** Développement du support pour *X11* (xdotool/Tesseract) et initialisation du pont *Wayland* via le portail *AT-SPI* ou les flux *PipeWire*.
+*   **Création du gestionnaire de contexte :**
+    *   Développement du module capable d'identifier l'application active (ex: si le processus parent est `Code.exe` ou `Cursor`, adapter le prompt du LLM en mode "Développement").
+
+---
+
+### Phase 3 : Développement des Interfaces Natives (Overlays) (Mois 4 - 5)
+
+C'est ici que l'on crée l'expérience "Incrustation en premier plan" sans Electron, pour garantir une fluidité absolue.
+
+*   **Création des 3 Frontends en parallèle :**
+    *   **macOS UI :** Projet Swift / AppKit (`NSPanel` flottant, effet de flou natif vibré).
+    *   **Windows UI :** Projet C# / WPF ou WinUI 3 (Styles de fenêtres étendus `WS_EX_TRANSPARENT`, effets *Mica*/*Acrylic*).
+    *   **Linux UI :** Projet C++ / Qt6 ou GTK4 (Gestion des fenêtres de type dock/layer shell avec gestion de la transparence transparente au clic).
+*   **Interfaçage :** Connecter ces interfaces graphiques aux fonctions de capture et au cœur Rust développé en Phase 1.
+
+---
+
+### Phase 4 : Ergonomie, UX Fine & Optimisations (Mois 6)
+
+L'outil fonctionne, il faut maintenant le rendre agréable et non-intrusif.
+
+*   **Comportement de l'Overlay :**
+    *   Développement de l'algorithme de "Changement de focus" (la fenêtre s'estompe dès que la souris s'éloigne).
+    *   Implémentation de l'ancrage magnétique (la bulle d'explication "suit" le déplacement de la fenêtre cible).
+    *   Intégration du système de *Click-Through* (pouvoir cliquer à travers l'overlay si l'utilisateur interagit avec l'application du dessous).
+*   **Optimisation des performances :**
+    *   Chasse aux fuites mémoire et réduction du temps de latence de l'OCR (objectif : < 150ms entre le raccourci clavier et l'affichage des premières suggestions).
+
+---
+
+### Phase 5 : Phase Pilote & Déploiement (Mois 7)
+
+*   **Beta Test Fermé :** Test de l'outil en conditions réelles (par exemple, sur des flux de travail quotidiens en développement logiciel, analyse de logs, ou lecture de documentations denses).
+*   **Ajustement des Prompts du LLM :** Raffinement des instructions système (System Prompts) pour s'assurer que les explications fournies en incrustation soient courtes, percutantes et structurées sous forme de puces (Markdown léger).
+*   **Packaging :** Création des installeurs natifs (`.dmg` notarisé pour Mac, `.msi` pour Windows, paquet `.deb` / Flatpak pour Linux).
+
+---
+
+### Résumé du planning de livraison
+
+```
+Mois 1 & 2 ────────────────► [Phase 1: Cœur Rust & Logique LLM]
+Mois 3     ────────────────► [Phase 2: R&D Capture & OCR par OS]
+Mois 4 & 5 ────────────────► [Phase 3: Développement des Interfaces Natives]
+Mois 6     ────────────────► [Phase 4: UX Fine, Ancrage & Performance]
+Mois 7     ────────────────► [Phase 5: Beta, Packaging & Release]
+```
+
+Ce plan d'action permet de valider les plus gros risques techniques (notamment la capture sous Wayland pour Linux et le non-vol de focus sur Windows/Mac) dès le premier tiers du projet, garantissant ainsi la viabilité de l'outil.
+
