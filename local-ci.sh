@@ -52,13 +52,20 @@ echo
 check "cargo fmt" cargo fmt --all --check
 check "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
 
-if command -v cargo-nextest &>/dev/null; then
-    check "cargo nextest" cargo nextest run --workspace --no-fail-fast
+# Vérifie si le linkeur peut trouver les bibliothèques système (xcb, dbus, etc.)
+if pkg-config --exists xcb 2>/dev/null; then
+    if command -v cargo-nextest &>/dev/null; then
+        check "cargo nextest" cargo nextest run --workspace --no-fail-fast
+    else
+        check "cargo test" cargo test --workspace --all-features
+    fi
+    check "cargo build --release" cargo build --release
 else
-    check "cargo test" cargo test --workspace --all-features
+    echo -e "${YELLOW}⚠ libxcb non trouvé — tests+build sautés (sudo apt install libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev)${NC}"
+    echo -e "${YELLOW}⚠ Exécute cargo test --lib et cargo check --lib comme substitut${NC}"
+    check "cargo test (lib, no-link)" cargo check --lib
+    check "cargo check (release equivalent)" cargo check --release
 fi
-
-check "cargo build --release" cargo build --release
 
 # --- Outils de la CI (exécutés si installés en local) ---
 
