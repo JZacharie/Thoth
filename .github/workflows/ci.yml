@@ -31,7 +31,9 @@ jobs:
           fail_level: error
 
       - name: GitLeaks (secret scanning)
-        if: ${{ secrets.GITLEAKS_LICENSE != '' }}
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        if: env.GITLEAKS_LICENSE != ''
         uses: gitleaks/gitleaks-action@v3
 
   # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
