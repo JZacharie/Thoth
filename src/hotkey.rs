@@ -195,9 +195,7 @@ mod platform_win {
             for &(id, fs, vk) in &hotkeys {
                 unsafe {
                     if RegisterHotKey(std::ptr::null_mut(), id, fs, vk) == 0 {
-                        tracing::error!("RegisterHotKey (id={id}) failed: {}", unsafe {
-                            GetLastError()
-                        });
+                        tracing::error!("RegisterHotKey (id={id}) failed: {}", GetLastError());
                     }
                 }
             }

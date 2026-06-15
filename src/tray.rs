@@ -1,7 +1,10 @@
-#[cfg(windows)]
-mod platform {
-    use crate::auto_start;
-    use crate::metrics::UsageMetrics;
+use anyhow::Result;
+use std::path::PathBuf;
+use std::sync::{Arc, atomic::AtomicBool};
+use tokio::sync::oneshot;
+
+#[cfg(any(windows, target_os = "macos"))]
+mod tray_impl {
     use anyhow::Result;
     use std::path::PathBuf;
     use std::sync::{
@@ -10,12 +13,12 @@ mod platform {
     };
     use tokio::sync::oneshot;
     use tray_icon::{
-        Icon, TrayIconBuilder,
+        Icon, TrayIcon, TrayIconBuilder,
         menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DispatchMessageW, GetMessageW, MSG, PostQuitMessage, TranslateMessage,
-    };
+
+    use crate::auto_start;
+    use crate::metrics::UsageMetrics;
 
     struct MenuStrings {
         status_enabled: &'static str,
@@ -38,7 +41,7 @@ mod platform {
                 status_disabled: "Thoth — Désactivé",
                 toggle_disable: "Désactiver",
                 toggle_enable: "Activer",
-                auto_start: "Démarrer avec Windows",
+                auto_start: "Démarrer au démarrage",
                 config: "Configuration",
                 stats: "Statistiques",
                 reset_stats: "Réinitialiser les stats",
@@ -51,7 +54,7 @@ mod platform {
                 status_disabled: "Thoth — Disabled",
                 toggle_disable: "Disable",
                 toggle_enable: "Enable",
-                auto_start: "Start with Windows",
+                auto_start: "Start on boot",
                 config: "Configuration",
                 stats: "Statistics",
                 reset_stats: "Reset statistics",
@@ -62,12 +65,37 @@ mod platform {
         }
     }
 
-    pub fn start(
-        shutdown_tx: oneshot::Sender<()>,
-        enabled: Arc<AtomicBool>,
-        log_path: PathBuf,
-        _config_path: PathBuf,
-    ) -> Result<()> {
+    struct MenuItems {
+        status_item: MenuItem,
+        toggle_item: MenuItem,
+        auto_start_item: CheckMenuItem,
+        config_item: MenuItem,
+        stats_item: MenuItem,
+        reset_stats_item: MenuItem,
+        logs_item: MenuItem,
+        quit_item: MenuItem,
+    }
+
+    fn load_icons() -> Result<(Icon, Icon)> {
+        let png_bytes = include_bytes!("../resources/thoth.png");
+        let decoded = image::load_from_memory_with_format(png_bytes, image::ImageFormat::Png)?;
+        let rgba_img = decoded.to_rgba8();
+        let (width, height) = rgba_img.dimensions();
+        let raw = rgba_img.clone().into_raw();
+        let color_icon = Icon::from_rgba(raw, width, height)?;
+
+        let grayscale_img = image::DynamicImage::ImageRgba8(rgba_img).grayscale();
+        let grayscale_rgba = grayscale_img.to_rgba8();
+        let grayscale_icon = Icon::from_rgba(grayscale_rgba.into_raw(), width, height)?;
+
+        Ok((color_icon, grayscale_icon))
+    }
+
+    fn build_tray(
+        enabled: &AtomicBool,
+        color_icon: &Icon,
+        grayscale_icon: &Icon,
+    ) -> Result<(TrayIcon, MenuItems, MenuStrings)> {
         let s = menu_strings();
         let menu = Menu::new();
 
@@ -95,104 +123,212 @@ mod platform {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit_item)?;
 
-        // Load thoth.png from embedded resources
-        let png_bytes = include_bytes!("../resources/thoth.png");
-        let decoded = image::load_from_memory_with_format(png_bytes, image::ImageFormat::Png)?;
-        let rgba_img = decoded.to_rgba8();
-        let (width, height) = rgba_img.dimensions();
-        let color_icon = Icon::from_rgba(rgba_img.clone().into_raw(), width, height)?;
-
-        // Génère la version noir et blanc (grayscale) de l'image
-        let grayscale_decoded = image::DynamicImage::ImageRgba8(rgba_img).grayscale();
-        let grayscale_rgba = grayscale_decoded.to_rgba8();
-        let grayscale_icon = Icon::from_rgba(grayscale_rgba.into_raw(), width, height)?;
-
         let initial_enabled = enabled.load(Ordering::Relaxed);
-
         let mut builder = TrayIconBuilder::new()
             .with_tooltip(s.tooltip)
             .with_menu(Box::new(menu));
 
-        if initial_enabled {
-            builder = builder.with_icon(color_icon.clone());
+        builder = builder.with_icon(if initial_enabled {
+            color_icon.clone()
         } else {
-            builder = builder.with_icon(grayscale_icon.clone());
-        }
+            grayscale_icon.clone()
+        });
+
         let tray = builder.build()?;
 
+        Ok((
+            tray,
+            MenuItems {
+                status_item,
+                toggle_item,
+                auto_start_item,
+                config_item,
+                stats_item,
+                reset_stats_item,
+                logs_item,
+                quit_item,
+            },
+            s,
+        ))
+    }
+
+    fn open_log(log_path: &std::path::Path) {
+        #[cfg(windows)]
+        let _ = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Start-Process powershell -ArgumentList '-NoExit', '-Command', \
+                     'Get-Content \"{}\" -Wait -Tail 50'",
+                    log_path.to_string_lossy()
+                ),
+            ])
+            .spawn();
+        #[cfg(target_os = "macos")]
+        let _ = std::process::Command::new("Console").arg(log_path).spawn();
+    }
+
+    fn handle_menu_event(
+        event_id: &tray_icon::menu::MenuId,
+        items: &MenuItems,
+        tray: &TrayIcon,
+        enabled: &AtomicBool,
+        color_icon: &Icon,
+        grayscale_icon: &Icon,
+        shutdown_tx: &mut Option<oneshot::Sender<()>>,
+        log_path: &std::path::Path,
+        s: &MenuStrings,
+    ) -> bool {
+        if event_id == &items.quit_item.id() {
+            tracing::info!("tray: quit requested");
+            if let Some(tx) = shutdown_tx.take() {
+                let _ = tx.send(());
+            }
+            return true;
+        }
+
+        if event_id == &items.toggle_item.id() {
+            let new_state = !enabled.load(Ordering::Relaxed);
+            enabled.store(new_state, Ordering::Relaxed);
+            items.toggle_item.set_text(if new_state {
+                s.toggle_disable
+            } else {
+                s.toggle_enable
+            });
+            items.status_item.set_text(if new_state {
+                s.status_enabled
+            } else {
+                s.status_disabled
+            });
+            let _ = tray.set_icon(Some(if new_state {
+                color_icon.clone()
+            } else {
+                grayscale_icon.clone()
+            }));
+            return false;
+        }
+
+        if event_id == &items.auto_start_item.id() {
+            let new_state = !auto_start::is_enabled();
+            if new_state {
+                let _ = auto_start::enable();
+            } else {
+                let _ = auto_start::disable();
+            }
+            items.auto_start_item.set_checked(new_state);
+            return false;
+        }
+
+        if event_id == &items.config_item.id() {
+            if let Ok(exe_path) = std::env::current_exe() {
+                let _ = std::process::Command::new(exe_path).arg("--config").spawn();
+            }
+            return false;
+        }
+
+        if event_id == &items.stats_item.id() {
+            if let Ok(exe_path) = std::env::current_exe() {
+                let _ = std::process::Command::new(exe_path).arg("--stats").spawn();
+            }
+            return false;
+        }
+
+        if event_id == &items.reset_stats_item.id() {
+            UsageMetrics::default().save();
+            tracing::info!("stats reset");
+            return false;
+        }
+
+        if event_id == &items.logs_item.id() {
+            if log_path.exists() {
+                open_log(log_path);
+            } else {
+                tracing::warn!("log file not found: {}", log_path.display());
+            }
+            return false;
+        }
+
+        false
+    }
+
+    #[cfg(windows)]
+    pub fn start(
+        shutdown_tx: oneshot::Sender<()>,
+        enabled: Arc<AtomicBool>,
+        log_path: PathBuf,
+        _config_path: PathBuf,
+    ) -> Result<()> {
+        let (color_icon, grayscale_icon) = load_icons()?;
+        let (tray, items, s) = build_tray(&enabled, &color_icon, &grayscale_icon)?;
         let mut shutdown_tx = Some(shutdown_tx);
 
         unsafe {
-            let mut msg = std::mem::zeroed::<MSG>();
+            let mut msg = std::mem::zeroed::<windows_sys::Win32::UI::WindowsAndMessaging::MSG>();
             loop {
-                let result = GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0);
+                let result = windows_sys::Win32::UI::WindowsAndMessaging::GetMessageW(
+                    &mut msg,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                );
                 if result == 0 || result == -1 {
                     break;
                 }
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
+                windows_sys::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
+                windows_sys::Win32::UI::WindowsAndMessaging::DispatchMessageW(&msg);
 
                 while let Ok(event) = MenuEvent::receiver().try_recv() {
-                    if event.id == quit_item.id() {
-                        tracing::info!("tray: quit requested");
-                        if let Some(tx) = shutdown_tx.take() {
-                            let _ = tx.send(());
-                        }
-                        PostQuitMessage(0);
-                    } else if event.id == toggle_item.id() {
-                        let new_state = !enabled.load(Ordering::Relaxed);
-                        enabled.store(new_state, Ordering::Relaxed);
-                        let s = menu_strings();
-                        toggle_item.set_text(if new_state {
-                            s.toggle_disable
-                        } else {
-                            s.toggle_enable
-                        });
-                        status_item.set_text(if new_state {
-                            s.status_enabled
-                        } else {
-                            s.status_disabled
-                        });
-                        if new_state {
-                            let _ = tray.set_icon(Some(color_icon.clone()));
-                        } else {
-                            let _ = tray.set_icon(Some(grayscale_icon.clone()));
-                        }
-                    } else if event.id == auto_start_item.id() {
-                        let new_state = !auto_start::is_enabled();
-                        if new_state {
-                            let _ = auto_start::enable();
-                        } else {
-                            let _ = auto_start::disable();
-                        }
-                        auto_start_item.set_checked(new_state);
-                    } else if event.id == config_item.id() {
-                        if let Ok(exe_path) = std::env::current_exe() {
-                            let _ = std::process::Command::new(exe_path).arg("--config").spawn();
-                        }
-                    } else if event.id == stats_item.id() {
-                        if let Ok(exe_path) = std::env::current_exe() {
-                            let _ = std::process::Command::new(exe_path).arg("--stats").spawn();
-                        }
-                    } else if event.id == reset_stats_item.id() {
-                        UsageMetrics::default().save();
-                        tracing::info!("stats reset");
-                    } else if event.id == logs_item.id() {
-                        if log_path.exists() {
-                            let _ = std::process::Command::new("powershell")
-                                .args([
-                                    "-NoProfile",
-                                    "-Command",
-                                    &format!(
-                                        "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Get-Content \\\"{}\\\" -Wait -Tail 50'",
-                                        log_path.to_string_lossy()
-                                    ),
-                                ])
-                                .spawn();
-                        } else {
-                            tracing::warn!("log file not found: {}", log_path.display());
-                        }
+                    if handle_menu_event(
+                        &event.id,
+                        &items,
+                        &tray,
+                        &enabled,
+                        &color_icon,
+                        &grayscale_icon,
+                        &mut shutdown_tx,
+                        &log_path,
+                        &s,
+                    ) {
+                        windows_sys::Win32::UI::WindowsAndMessaging::PostQuitMessage(0);
                     }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn start(
+        shutdown_tx: oneshot::Sender<()>,
+        enabled: Arc<AtomicBool>,
+        log_path: PathBuf,
+        _config_path: PathBuf,
+    ) -> Result<()> {
+        let (color_icon, grayscale_icon) = load_icons()?;
+        let (tray, items, s) = build_tray(&enabled, &color_icon, &grayscale_icon)?;
+        let mut shutdown_tx = Some(shutdown_tx);
+
+        loop {
+            match MenuEvent::receiver().recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(event) => {
+                    if handle_menu_event(
+                        &event.id,
+                        &items,
+                        &tray,
+                        &enabled,
+                        &color_icon,
+                        &grayscale_icon,
+                        &mut shutdown_tx,
+                        &log_path,
+                        &s,
+                    ) {
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Timeout — continue polling
                 }
             }
         }
@@ -201,22 +337,16 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
-mod platform {
-    use anyhow::Result;
-    use std::path::PathBuf;
-    use std::sync::{Arc, atomic::AtomicBool};
-    use tokio::sync::oneshot;
+#[cfg(any(windows, target_os = "macos"))]
+pub use tray_impl::start;
 
-    pub fn start(
-        _shutdown_tx: oneshot::Sender<()>,
-        _enabled: Arc<AtomicBool>,
-        _log_path: PathBuf,
-        _config_path: PathBuf,
-    ) -> Result<()> {
-        tracing::warn!("system tray not supported on this platform");
-        Ok(())
-    }
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn start(
+    _shutdown_tx: oneshot::Sender<()>,
+    _enabled: Arc<AtomicBool>,
+    _log_path: PathBuf,
+    _config_path: PathBuf,
+) -> Result<()> {
+    tracing::warn!("system tray not supported on Linux (no GTK)");
+    Ok(())
 }
-
-pub use platform::*;

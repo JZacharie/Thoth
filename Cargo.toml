@@ -58,6 +58,8 @@ windows-sys = { version = "0.61", features = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 rdev = "0.5"
+tray-icon = "0.24"
+notify-rust = "4"
 
 [profile.release]
 opt-level = "z"

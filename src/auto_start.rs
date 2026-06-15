@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::path::PathBuf;
 
 #[cfg(windows)]
 mod platform {
@@ -52,6 +51,7 @@ mod platform {
 #[cfg(target_os = "macos")]
 mod platform {
     use super::*;
+    use std::path::PathBuf;
 
     fn plist_path() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
@@ -108,6 +108,7 @@ mod platform {
 #[cfg(target_os = "linux")]
 mod platform {
     use super::*;
+    use std::path::PathBuf;
 
     fn desktop_path() -> PathBuf {
         let config = std::env::var("XDG_CONFIG_HOME")
