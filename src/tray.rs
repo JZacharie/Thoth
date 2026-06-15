@@ -1,8 +1,3 @@
-use anyhow::Result;
-use std::path::PathBuf;
-use std::sync::{Arc, atomic::AtomicBool};
-use tokio::sync::oneshot;
-
 #[cfg(any(windows, target_os = "macos"))]
 mod tray_impl {
     use anyhow::Result;
@@ -169,6 +164,7 @@ mod tray_impl {
         let _ = std::process::Command::new("Console").arg(log_path).spawn();
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_menu_event(
         event_id: &tray_icon::menu::MenuId,
         items: &MenuItems,
@@ -180,7 +176,8 @@ mod tray_impl {
         log_path: &std::path::Path,
         s: &MenuStrings,
     ) -> bool {
-        if event_id == &items.quit_item.id() {
+        let quit_id = items.quit_item.id();
+        if *event_id == quit_id {
             tracing::info!("tray: quit requested");
             if let Some(tx) = shutdown_tx.take() {
                 let _ = tx.send(());
@@ -188,7 +185,8 @@ mod tray_impl {
             return true;
         }
 
-        if event_id == &items.toggle_item.id() {
+        let toggle_id = items.toggle_item.id();
+        if *event_id == toggle_id {
             let new_state = !enabled.load(Ordering::Relaxed);
             enabled.store(new_state, Ordering::Relaxed);
             items.toggle_item.set_text(if new_state {
@@ -209,7 +207,8 @@ mod tray_impl {
             return false;
         }
 
-        if event_id == &items.auto_start_item.id() {
+        let auto_start_id = items.auto_start_item.id();
+        if *event_id == auto_start_id {
             let new_state = !auto_start::is_enabled();
             if new_state {
                 let _ = auto_start::enable();
@@ -220,27 +219,31 @@ mod tray_impl {
             return false;
         }
 
-        if event_id == &items.config_item.id() {
+        let config_id = items.config_item.id();
+        if *event_id == config_id {
             if let Ok(exe_path) = std::env::current_exe() {
                 let _ = std::process::Command::new(exe_path).arg("--config").spawn();
             }
             return false;
         }
 
-        if event_id == &items.stats_item.id() {
+        let stats_id = items.stats_item.id();
+        if *event_id == stats_id {
             if let Ok(exe_path) = std::env::current_exe() {
                 let _ = std::process::Command::new(exe_path).arg("--stats").spawn();
             }
             return false;
         }
 
-        if event_id == &items.reset_stats_item.id() {
+        let reset_id = items.reset_stats_item.id();
+        if *event_id == reset_id {
             UsageMetrics::default().save();
             tracing::info!("stats reset");
             return false;
         }
 
-        if event_id == &items.logs_item.id() {
+        let logs_id = items.logs_item.id();
+        if *event_id == logs_id {
             if log_path.exists() {
                 open_log(log_path);
             } else {
@@ -327,9 +330,7 @@ mod tray_impl {
                         break;
                     }
                 }
-                Err(_) => {
-                    // Timeout — continue polling
-                }
+                Err(_) => {}
             }
         }
 
@@ -342,11 +343,11 @@ pub use tray_impl::start;
 
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn start(
-    _shutdown_tx: oneshot::Sender<()>,
-    _enabled: Arc<AtomicBool>,
-    _log_path: PathBuf,
-    _config_path: PathBuf,
-) -> Result<()> {
+    _shutdown_tx: tokio::sync::oneshot::Sender<()>,
+    _enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    _log_path: std::path::PathBuf,
+    _config_path: std::path::PathBuf,
+) -> anyhow::Result<()> {
     tracing::warn!("system tray not supported on Linux (no GTK)");
     Ok(())
 }

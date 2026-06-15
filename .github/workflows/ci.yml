@@ -31,7 +31,7 @@ jobs:
           fail_level: error
 
       - name: GitLeaks (secret scanning)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         with:
           config-path: .gitleaks.toml
 
