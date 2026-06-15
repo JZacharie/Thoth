@@ -19,7 +19,7 @@ impl ClipboardManager {
 
     pub fn copy_selected_text(&mut self) -> Result<String> {
         self.previous = self.inner.get_text().ok();
-        simulate_ctrl_c()?;
+        platform::simulate_copy()?;
         std::thread::sleep(Duration::from_millis(100));
         let text = self.inner.get_text()?;
         Ok(text)
@@ -27,7 +27,7 @@ impl ClipboardManager {
 
     pub fn paste_text(&mut self, text: &str, restore: bool) -> Result<()> {
         self.inner.set_text(text)?;
-        simulate_ctrl_v()?;
+        platform::simulate_paste()?;
         if restore {
             std::thread::sleep(Duration::from_millis(250));
             self.restore()?;
@@ -43,71 +43,101 @@ impl ClipboardManager {
         }
         Ok(())
     }
+
+    pub fn simulate_select_all(&mut self) -> Result<()> {
+        platform::simulate_select_all()
+    }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod platform {
     use anyhow::Result;
     use rdev::{EventType, Key, simulate};
     use std::time::Duration;
 
-    unsafe extern "system" {
-        fn GetAsyncKeyState(vkey: i32) -> i16;
-    }
-
-    pub fn wait_for_modifiers_release() {
-        let start = std::time::Instant::now();
-        // 0x10 = Shift, 0x11 = Ctrl, 0x12 = Alt, 0x5B = LWin, 0x5C = RWin
-        while unsafe {
-            (GetAsyncKeyState(0x10) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(0x11) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(0x12) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(0x5B) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(0x5C) as u16 & 0x8000) != 0
-        } {
-            if start.elapsed() > Duration::from_millis(500) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
+    fn modifier_key() -> Key {
+        #[cfg(target_os = "macos")]
+        {
+            Key::MetaLeft
+        }
+        #[cfg(windows)]
+        {
+            Key::ControlLeft
         }
     }
 
-    pub fn simulate_ctrl_c() -> Result<()> {
-        wait_for_modifiers_release();
-        simulate(&EventType::KeyPress(Key::ControlLeft))?;
-        simulate(&EventType::KeyPress(Key::KeyC))?;
+    fn wait_for_modifiers_release() {
+        let start = std::time::Instant::now();
+        #[cfg(windows)]
+        {
+            unsafe extern "system" {
+                fn GetAsyncKeyState(vkey: i32) -> i16;
+            }
+            unsafe {
+                while (GetAsyncKeyState(0x10) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(0x11) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(0x12) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(0x5B) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(0x5C) as u16 & 0x8000) != 0
+                {
+                    if start.elapsed() > Duration::from_millis(500) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn press(key: Key) -> Result<()> {
+        simulate(&EventType::KeyPress(key))?;
         std::thread::sleep(Duration::from_millis(10));
-        simulate(&EventType::KeyRelease(Key::KeyC))?;
-        simulate(&EventType::KeyRelease(Key::ControlLeft))?;
+        simulate(&EventType::KeyRelease(key))?;
         Ok(())
     }
 
-    pub fn simulate_ctrl_v() -> Result<()> {
+    fn press_with_modifier(key: Key) -> Result<()> {
         wait_for_modifiers_release();
-        simulate(&EventType::KeyPress(Key::ControlLeft))?;
-        simulate(&EventType::KeyPress(Key::KeyV))?;
+        simulate(&EventType::KeyPress(modifier_key()))?;
         std::thread::sleep(Duration::from_millis(10));
-        simulate(&EventType::KeyRelease(Key::KeyV))?;
-        simulate(&EventType::KeyRelease(Key::ControlLeft))?;
+        press(key)?;
+        simulate(&EventType::KeyRelease(modifier_key()))?;
         Ok(())
+    }
+
+    pub fn simulate_copy() -> Result<()> {
+        press_with_modifier(Key::KeyC)
+    }
+
+    pub fn simulate_paste() -> Result<()> {
+        press_with_modifier(Key::KeyV)
+    }
+
+    pub fn simulate_select_all() -> Result<()> {
+        press_with_modifier(Key::KeyA)
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 mod platform {
     use anyhow::Result;
 
-    pub fn wait_for_modifiers_release() {}
-
-    pub fn simulate_ctrl_c() -> Result<()> {
-        tracing::warn!("simulate_ctrl_c: not supported on this platform");
+    pub fn simulate_copy() -> Result<()> {
+        tracing::warn!("keyboard simulation not supported on Linux");
         Ok(())
     }
 
-    pub fn simulate_ctrl_v() -> Result<()> {
-        tracing::warn!("simulate_ctrl_v: not supported on this platform");
+    pub fn simulate_paste() -> Result<()> {
+        tracing::warn!("keyboard simulation not supported on Linux");
+        Ok(())
+    }
+
+    pub fn simulate_select_all() -> Result<()> {
+        tracing::warn!("keyboard simulation not supported on Linux");
         Ok(())
     }
 }
-
-use platform::*;

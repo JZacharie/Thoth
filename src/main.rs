@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, atomic::AtomicBool};
@@ -8,36 +8,29 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
-#[cfg(windows)]
 fn show_crash_dialog(message: &str, log_path: &std::path::Path) {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
+    use rfd::MessageButtons;
 
-    let title: Vec<u16> = OsStr::new("Thoth — Erreur critique\0")
-        .encode_wide()
-        .collect();
-    let body_str = format!(
+    let description = format!(
         "{}\n\nUn fichier de log a été enregistré à : {}\n\nVoulez-vous ouvrir le fichier de log ?",
         message,
         log_path.display()
     );
-    let body: Vec<u16> = OsStr::new(&format!("{}\0", body_str))
-        .encode_wide()
-        .collect();
+    let choice = rfd::MessageDialog::new()
+        .set_title("Thoth — Erreur critique")
+        .set_description(&description)
+        .set_buttons(MessageButtons::YesNo)
+        .show();
 
-    unsafe {
-        let result = windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
-            std::ptr::null_mut(),
-            body.as_ptr(),
-            title.as_ptr(),
-            windows_sys::Win32::UI::WindowsAndMessaging::MB_YESNO
-                | windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR,
-        );
-        if result == windows_sys::Win32::UI::WindowsAndMessaging::IDYES {
-            let _ = std::process::Command::new("notepad.exe")
-                .arg(log_path)
-                .spawn();
-        }
+    if choice == rfd::MessageDialogResult::Yes {
+        #[cfg(windows)]
+        let _ = std::process::Command::new("notepad.exe")
+            .arg(log_path)
+            .spawn();
+        #[cfg(target_os = "macos")]
+        let _ = std::process::Command::new("open").arg(log_path).spawn();
+        #[cfg(target_os = "linux")]
+        let _ = std::process::Command::new("xdg-open").arg(log_path).spawn();
     }
 }
 
@@ -56,13 +49,14 @@ async fn main() {
                 .unwrap_or_else(|| PathBuf::from("."));
             exe_dir.join("thoth.log")
         };
-        #[cfg(windows)]
         show_crash_dialog(&format!("Erreur fatale : {}", e), &log_file);
         std::process::exit(1);
     }
 }
 
 async fn main_inner() -> anyhow::Result<()> {
+    let _ = dotenvy::dotenv();
+
     let args: Vec<String> = std::env::args().collect();
     let is_insecure = args.iter().any(|arg| arg == "--insecure");
     thoth::set_insecure(is_insecure);
@@ -204,7 +198,6 @@ async fn main_inner() -> anyhow::Result<()> {
         let msg = format!("Panic occurred at {}: {}", location, payload);
         tracing::error!("{}", msg);
 
-        #[cfg(windows)]
         show_crash_dialog(&msg, &log_file_for_panic);
     }));
 

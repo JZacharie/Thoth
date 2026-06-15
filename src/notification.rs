@@ -37,6 +37,18 @@ mod platform {
             tracing::warn!("notification failed: {e}");
         }
     }
+
+    pub fn notify_screenshot_analysis() {
+        if let Err(e) = Notification::new()
+            .summary("Thoth")
+            .body("📷 Analyse d'écran en cours…")
+            .appname("Thoth")
+            .timeout(2000)
+            .show()
+        {
+            tracing::warn!("notification failed: {e}");
+        }
+    }
 }
 
 #[cfg(not(windows))]
@@ -51,6 +63,10 @@ mod platform {
 
     pub fn notify_warning(context: &str) {
         tracing::warn!("[notification] {context}");
+    }
+
+    pub fn notify_screenshot_analysis() {
+        tracing::info!("[notification] screenshot analysis started");
     }
 }
 
