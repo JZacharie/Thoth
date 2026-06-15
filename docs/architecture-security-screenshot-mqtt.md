@@ -40,10 +40,10 @@ Pour assurer le bon fonctionnement sur Windows, macOS et Linux, l'implémentatio
         ▼                            ▼                            ▼
 ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
 │  Input & Hotkey  │       │ Window Capture   │       │ Secure Storage   │
-│  (global-hotkey) │       │     (xcap)       │       │    (keyring)     │
+│      (rdev)      │       │     (xcap)       │       │    (keyring)     │
 └──────────────────┘       └──────────────────┘       └──────────────────┘
   - Windows: Win32           - Windows: GDI             - Windows: CredMgr
-  - macOS: Carbon            - macOS: CoreGraphics      - macOS: Keychain
+  - macOS: rdev              - macOS: CoreGraphics      - macOS: Keychain
   - Linux: X11/Wayland       - Linux: X11 / PipeWire    - Linux: SecretServ
 ```
 

@@ -93,7 +93,7 @@ pub fn start(
 ) -> Result<()> {
     #[cfg(windows)]
     {
-        platform_win::start(tx, pattern, enabled)
+        platform_win::start(tx, _pattern, enabled)
     }
     #[cfg(target_os = "macos")]
     {
@@ -148,7 +148,7 @@ mod platform_win {
 
     pub fn start(
         tx: mpsc::Sender<HotkeyAction>,
-        pattern: Arc<Mutex<HotkeyPattern>>,
+    _pattern: Arc<Mutex<HotkeyPattern>>,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
         let pat_default = pattern.lock().unwrap().clone();
@@ -255,7 +255,7 @@ mod platform_macos {
         }
     }
 
-    fn key_to_str(key: &Key) -> Option<String> {
+    fn key_to_str(key: &Key) -> Option<&'static str> {
         match key {
             Key::KeyA => Some("a"),
             Key::KeyB => Some("b"),
@@ -294,7 +294,7 @@ mod platform_macos {
             Key::Num8 => Some("8"),
             Key::Num9 => Some("9"),
             Key::Comma => Some(","),
-            Key::Semicolon => Some(";"),
+            Key::SemiColon => Some(";"),
             _ => None,
         }
     }
@@ -316,7 +316,7 @@ mod platform_macos {
                             pressed.lock().unwrap().insert(mod_name.to_string());
                         }
                         if let Some(key_name) = key_to_str(&key) {
-                            pressed.lock().unwrap().insert(key_name);
+                            pressed.lock().unwrap().insert(key_name.to_string());
                         }
                     }
                     EventType::KeyRelease(key) => {
@@ -333,7 +333,7 @@ mod platform_macos {
                             let has_cmd = p.contains("cmd") || p.contains("win");
 
                             if has_ctrl && has_shift && has_cmd {
-                                let action = match key_name.as_str() {
+                                let action = match key_name {
                                     "n" => Some(HotkeyAction::TranslateDefault),
                                     "," => Some(HotkeyAction::TranslateEnglish),
                                     ";" => Some(HotkeyAction::ExecuteInstruction),
@@ -352,7 +352,7 @@ mod platform_macos {
                     _ => {}
                 }
             }) {
-                tracing::error!("rdev listen failed: {e}");
+                tracing::error!("rdev listen failed: {e:?}");
             }
         });
 

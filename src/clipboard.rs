@@ -67,7 +67,7 @@ mod platform {
     }
 
     fn wait_for_modifiers_release() {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         #[cfg(windows)]
         {
             unsafe extern "system" {
@@ -80,7 +80,7 @@ mod platform {
                     || (GetAsyncKeyState(0x5B) as u16 & 0x8000) != 0
                     || (GetAsyncKeyState(0x5C) as u16 & 0x8000) != 0
                 {
-                    if start.elapsed() > Duration::from_millis(500) {
+                    if _start.elapsed() > Duration::from_millis(500) {
                         break;
                     }
                     std::thread::sleep(Duration::from_millis(10));
