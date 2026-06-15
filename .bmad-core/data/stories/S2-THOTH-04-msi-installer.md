@@ -56,7 +56,7 @@ msi:
           output: ./Thoth-{version}.msi
           variables: "ThothBinary=./release/thoth.exe"
       - name: Upload MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Thoth-{version}.msi
           path: ./Thoth-*.msi

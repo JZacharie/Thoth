@@ -139,7 +139,7 @@ jobs:
           RUSTFLAGS: "-C target-feature=+crt-static -C lto=yes -C codegen-units=1 -C opt-level=z"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thoth-windows-x86_64
           path: target/x86_64-pc-windows-msvc/release/thoth.exe
@@ -179,7 +179,7 @@ jobs:
           cp resources/thoth.png Thoth.app/Contents/Resources/ 2>/dev/null || true
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thoth-macos-aarch64
           path: Thoth.app
@@ -217,7 +217,7 @@ jobs:
           SCCACHE_GHA_ENABLED: true
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thoth-linux-x86_64
           path: target/release/thoth
@@ -246,7 +246,7 @@ jobs:
         run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
 
       - name: Upload MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thoth-msi
           path: ./Thoth-nightly.msi
@@ -278,7 +278,7 @@ jobs:
           wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
 
       - name: Upload MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thoth-msi-release
           path: ./Thoth-${{ github.ref_name }}.msi
