@@ -148,7 +148,7 @@ mod platform_win {
 
     pub fn start(
         tx: mpsc::Sender<HotkeyAction>,
-    _pattern: Arc<Mutex<HotkeyPattern>>,
+        pattern: Arc<Mutex<HotkeyPattern>>,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
         let pat_default = pattern.lock().unwrap().clone();
