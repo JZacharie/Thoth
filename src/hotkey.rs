@@ -97,6 +97,7 @@ pub fn start(
     }
     #[cfg(target_os = "macos")]
     {
+        let _ = pattern;
         platform_macos::start(tx, enabled)
     }
     #[cfg(not(any(windows, target_os = "macos")))]
@@ -325,7 +326,7 @@ mod platform_macos {
                         }
                         if let Some(key_name) = key_to_str(&key) {
                             let mut p = pressed.lock().unwrap();
-                            p.remove(&key_name);
+                            p.remove(key_name);
 
                             // Check for Ctrl+Shift+Cmd/Win+<key> combinations
                             let has_ctrl = p.contains("ctrl");
