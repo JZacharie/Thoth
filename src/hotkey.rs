@@ -93,7 +93,7 @@ pub fn start(
 ) -> Result<()> {
     #[cfg(windows)]
     {
-        platform_win::start(tx, _pattern, enabled)
+        platform_win::start(tx, pattern, enabled)
     }
     #[cfg(target_os = "macos")]
     {
