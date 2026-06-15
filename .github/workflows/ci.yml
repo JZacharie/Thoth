@@ -32,8 +32,6 @@ jobs:
 
       - name: GitLeaks (secret scanning)
         uses: gitleaks/gitleaks-action@v3
-        with:
-          config-path: .gitleaks.toml
 
   # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
   check:

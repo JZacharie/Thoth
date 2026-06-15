@@ -236,7 +236,7 @@ mod platform_macos {
     use anyhow::Result;
     use rdev::{EventType, Key, listen};
     use std::collections::HashSet;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
 
