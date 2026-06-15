@@ -23,7 +23,7 @@ image = { version = "0.24", default-features = false, features = ["png", "ico"] 
 eframe = { version = "0.29", default-features = false, features = ["glow", "default_fonts"] }
 rfd = "0.15"
 directories = "6"
-keyring = "3"
+keyring = "4"
 xcap = { version = "0.4", features = ["vendored"] }
 rumqttc = { version = "0.24", default-features = false, features = ["websocket", "use-rustls"] }
 base64 = "0.22"
