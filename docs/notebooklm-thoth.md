@@ -324,7 +324,8 @@ cargo fmt --all           # Formatage
 
 ## 12. Limitations connues
 
-- **Windows uniquement** — utilisation intensive des API Win32
+- **Windows, macOS, Linux** — support complet Windows/macOS, partiel Linux (pas de tray ni hotkeys globaux)
+- **Screenshot & MQTT** — nécessite MinIO S3 et broker EMQX configurés (optionnel)
 - **Dépendance à Pylos** — nécessite une instance Pylos (ou compatible OpenAI API) accessible
 - **Simulation clavier** — `Ctrl+C`/`Ctrl+V` simulé peut échouer avec certaines applications (UWP, jeux, terminaux spécifiques)
 - **Délai de copie** — 100ms d'attente entre `Ctrl+C` et la lecture du presse-papier (paramétré)

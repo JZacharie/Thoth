@@ -1,6 +1,6 @@
 # Epic : Portage de Thoth sur Linux et macOS (Apple)
 
-**Statut :** Planifié  
+**Statut :** Réalisé (v1.1.0)  
 **Responsable :** Équipe de développement  
 **Description :** Cette Epic englobe tout le travail nécessaire pour rendre l'application Thoth (gestionnaire et injecteur de texte LLM par raccourcis globaux) compatible avec Linux et macOS, en migrant les fonctionnalités dépendantes de Windows vers des solutions multiplateformes robustes.
 

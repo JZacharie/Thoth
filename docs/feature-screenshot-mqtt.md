@@ -1,6 +1,6 @@
 # Epic : Analyse Visuelle de Fenêtre et Publication MQTT
 
-**Statut :** Planifié  
+**Statut :** Réalisé (v1.1.0)  
 **Responsable :** Agent de développement  
 **Description :** Cette Epic décrit l'implémentation d'une fonctionnalité d'analyse d'écran par raccourci clavier global dans Thoth. L'application devra capturer la fenêtre active, envoyer l'image à Gemini 3.5 Flash via Pylos pour y répondre aux questions, stocker la capture et journaliser le résultat de manière structurée pour de futures analyses, puis publier la réponse sur un broker MQTT.
 

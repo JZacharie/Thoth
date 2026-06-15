@@ -246,7 +246,7 @@ Default level is `info`. Logs are written to `thoth.log` next to the executable.
 | `src/hotkey.rs` | `hotkey` | Global hotkey registration: RegisterHotKey (Win), rdev (macOS), stub (Linux) |
 | `src/gui.rs` | `gui` | eframe/egui native GUI: prompt with history, config editor (incl. MQTT/S3/Vision), stats dashboard |
 | `src/dialog.rs` | `dialog` | Minimal eframe prompt dialog (legacy entry point for prompt mode) |
-| `src/tray.rs` | `tray` | System tray icon & menu (tray-icon crate) — Windows only |
+| `src/tray.rs` | `tray` | System tray icon & menu (tray-icon crate) — Windows + macOS |
 | `src/notification.rs` | `notification` | Native OS toast notifications |
 | `src/metrics.rs` | `metrics` | Usage statistics persisted as JSON via `directories` crate |
 | `src/auto_start.rs` | `auto_start` | Auto-start: Windows Registry, macOS LaunchAgent plist, Linux .desktop |
@@ -497,7 +497,7 @@ system_prompt = "Analyse cette image de fenêtre..."
 | `src/hotkey.rs` | `hotkey` | Enregistrement hotkey : RegisterHotKey (Win), rdev (macOS), stub (Linux) |
 | `src/gui.rs` | `gui` | GUI native eframe/egui : prompt avec historique, config (MQTT/S3/Vision), stats |
 | `src/dialog.rs` | `dialog` | Mini dialogue eframe (point d'entrée legacy) |
-| `src/tray.rs` | `tray` | Icône et menu barre d'état — Windows uniquement |
+| `src/tray.rs` | `tray` | Icône et menu barre d'état — Windows + macOS |
 | `src/notification.rs` | `notification` | Notifications natives du système d'exploitation |
 | `src/metrics.rs` | `metrics` | Statistiques d'utilisation (JSON) via `directories` |
 | `src/auto_start.rs` | `auto_start` | Démarrage auto : registre Windows, plist macOS, .desktop Linux |
