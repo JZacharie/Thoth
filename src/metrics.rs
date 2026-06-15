@@ -61,10 +61,15 @@ impl UsageMetrics {
     }
 
     fn path() -> std::path::PathBuf {
-        let base = std::env::var("APPDATA")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
-        base.join("thoth").join("metrics.json")
+        directories::ProjectDirs::from("org", "Thoth", "Thoth")
+            .map(|d| d.data_dir().to_path_buf())
+            .unwrap_or_else(|| {
+                std::env::var("APPDATA")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join("thoth")
+            })
+            .join("metrics.json")
     }
 }
 

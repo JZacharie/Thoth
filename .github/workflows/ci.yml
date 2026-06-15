@@ -19,7 +19,7 @@ env:
 jobs:
   # ── Pre-checks rapides (pas de compilation Rust) ──────────────
   lint:
-    name: Lint (actionlint)
+    name: Lint (actionlint + gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -29,6 +29,11 @@ jobs:
         uses: reviewdog/action-actionlint@v1
         with:
           fail_level: error
+
+      - name: GitLeaks (secret scanning)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
 
   # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
   check:
@@ -107,9 +112,9 @@ jobs:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: true
 
-  # ── Build release (binaire + MSI) ────────────────────────────
-  build:
-    name: Build Release
+  # ── Build release (Windows) ──────────────────────────────────
+  build-windows:
+    name: Build (Windows)
     needs: [lint, check, msrv]
     runs-on: windows-latest
     timeout-minutes: 20
@@ -126,7 +131,7 @@ jobs:
       - name: Cache Cargo (registry)
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: build
+          shared-key: build-win
 
       - name: Build release binary
         run: cargo build --release --target x86_64-pc-windows-msvc
@@ -135,7 +140,6 @@ jobs:
           SCCACHE_GHA_ENABLED: true
           RUSTFLAGS: "-C target-feature=+crt-static -C lto=yes -C codegen-units=1 -C opt-level=z"
 
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -143,10 +147,88 @@ jobs:
           path: target/x86_64-pc-windows-msvc/release/thoth.exe
           compression-level: 0
 
+  # ── Build (macOS) ────────────────────────────────────────────
+  build-macos:
+    name: Build (macOS)
+    needs: [lint, check, msrv]
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-macos
+
+      - name: Build release binary
+        run: cargo build --release
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
+
+      - name: Create macOS app bundle
+        run: |
+          mkdir -p Thoth.app/Contents/MacOS
+          cp target/release/thoth Thoth.app/Contents/MacOS/
+          cp resources/thoth.png Thoth.app/Contents/Resources/ 2>/dev/null || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: thoth-macos-aarch64
+          path: Thoth.app
+          compression-level: 0
+
+  # ── Build (Linux) ────────────────────────────────────────────
+  build-linux:
+    name: Build (Linux)
+    needs: [lint, check, msrv]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libdbus-1-dev libx11-dev libxkbcommon-dev libwayland-dev
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-linux
+
+      - name: Build release binary
+        run: cargo build --release
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: thoth-linux-x86_64
+          path: target/release/thoth
+          compression-level: 0
+
   # ── MSI (chaque push sur main, pas besoin de signature) ──────
   msi:
     name: Build MSI
-    needs: [build]
+    needs: [build-windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     timeout-minutes: 5
@@ -175,7 +257,7 @@ jobs:
   # ── MSI signé (tags uniquement) ─────────────────────────────
   msi-release:
     name: Build MSI (Release)
-    needs: [build]
+    needs: [build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     timeout-minutes: 5
@@ -207,20 +289,32 @@ jobs:
   # ── GitHub Release (tags uniquement) ─────────────────────────
   release:
     name: Publish Release
-    needs: [build, msi-release]
+    needs: [build-windows, build-macos, build-linux, msi-release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download build artifact
+      - name: Download Windows artifact
         uses: actions/download-artifact@v8
         with:
           name: thoth-windows-x86_64
-          path: ./release
+          path: ./release/windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: thoth-macos-aarch64
+          path: ./release/macos
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: thoth-linux-x86_64
+          path: ./release/linux
 
       - name: Download release MSI
         uses: actions/download-artifact@v8
@@ -229,19 +323,27 @@ jobs:
           path: ./release
 
       - name: Prepare release assets
-        shell: pwsh
         run: |
-          certutil -hashfile ./release/thoth.exe SHA256 > ./release/thoth.exe.sha256
-          Compress-Archive -Path ./release/thoth.exe, ./release/thoth.exe.sha256 -DestinationPath thoth-windows-x86_64.zip
+          # Windows
+          sha256sum ./release/windows/thoth.exe > ./release/windows/thoth.exe.sha256
+          zip -j thoth-windows-x86_64.zip ./release/windows/thoth.exe ./release/windows/thoth.exe.sha256
+          # Linux
+          sha256sum ./release/linux/thoth > ./release/linux/thoth.sha256
+          tar -czf thoth-linux-x86_64.tar.gz -C ./release/linux thoth thoth.sha256
+          # macOS
+          zip -r thoth-macos-aarch64.zip ./release/macos/Thoth.app
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             thoth-windows-x86_64.zip
-            ./release/thoth.exe
-            ./release/thoth.exe.sha256
+            ./release/windows/thoth.exe
+            ./release/windows/thoth.exe.sha256
             ./release/Thoth-*.msi
+            thoth-linux-x86_64.tar.gz
+            ./release/linux/thoth
+            thoth-macos-aarch64.zip
           generate_release_notes: true
           draft: false
           prerelease: false

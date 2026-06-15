@@ -13,6 +13,13 @@ ignore = [
     # proc-macro-error: déprécié, dépendance transitive
     "RUSTSEC-2024-0370",
     "RUSTSEC-2026-0009",
+    # rustls-pemfile: déprécié, dépendance transitive de rust-s3
+    "RUSTSEC-2025-0134",
+    # webpki CRL: dépendance transitive de rustls
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
 ]
 
 [licenses]
@@ -31,6 +38,8 @@ allow = [
     "BSL-1.0",
     "OFL-1.1",
     "LicenseRef-UFL-1.0",
+    "Unlicense",
+    "BSD-2-Clause",
 ]
 confidence-threshold = 0.8
 

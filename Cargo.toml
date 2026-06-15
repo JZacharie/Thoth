@@ -15,17 +15,25 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 toml = "1.1"
-thiserror = "2"
 regex = "1"
 tracing-appender = "0.2"
 time = "=0.3.36"
 sys-locale = "0.3"
 image = { version = "0.24", default-features = false, features = ["png", "ico"] }
 eframe = { version = "0.29", default-features = false, features = ["glow", "default_fonts"] }
+rfd = "0.15"
+directories = "6"
+keyring = "3"
+xcap = { version = "0.4", features = ["vendored"] }
+rumqttc = { version = "0.24", default-features = false, features = ["websocket", "use-rustls"] }
+base64 = "0.22"
+dotenvy = "0.15"
+uuid = { version = "1", features = ["v4"] }
+rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls", "with-tokio"] }
 
 [package.metadata.cargo-udeps.ignore]
 development = []
-normal = ["thiserror"]
+normal = []
 
 [dev-dependencies]
 wiremock = "0.6"
@@ -47,6 +55,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rdev = "0.5"
 
 [profile.release]
 opt-level = "z"

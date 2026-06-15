@@ -5,10 +5,15 @@ pub mod dialog;
 pub mod gui;
 pub mod hotkey;
 pub mod metrics;
+pub mod mqtt;
 pub mod notification;
 pub mod orchestrator;
 pub mod pylos_client;
+pub mod s3_storage;
+pub mod screenshot;
+pub mod secure_storage;
 pub mod tray;
+pub mod vision;
 
 pub use config::{BehaviorConfig, Config, PylosConfig, validate_language};
 pub use hotkey::{HotkeyKey, HotkeyPattern, Modifier};

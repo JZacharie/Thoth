@@ -1,8 +1,8 @@
 use anyhow::Result;
-use std::sync::{Arc, Mutex};
 
 #[cfg(windows)]
 pub fn show_prompt_dialog() -> Result<String> {
+    use std::sync::{Arc, Mutex};
     let result = Arc::new(Mutex::new(None));
     let result_clone = result.clone();
 

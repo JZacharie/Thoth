@@ -74,10 +74,74 @@ impl BehaviorConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MqttConfig {
+    pub broker: String,
+    pub username: String,
+    pub password: String,
+    pub topic: String,
+    pub port: u16,
+    pub use_tls: bool,
+}
+
+impl Default for MqttConfig {
+    fn default() -> Self {
+        Self {
+            broker: "mqtt-emqx.p.zacharie.org".into(),
+            username: "joseph".into(),
+            password: std::env::var("MQTT_PASSWORD").unwrap_or_default(),
+            topic: "thoth/answers".into(),
+            port: 8883,
+            use_tls: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct S3Config {
+    pub endpoint: String,
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub region: String,
+}
+
+impl Default for S3Config {
+    fn default() -> Self {
+        Self {
+            endpoint: "https://minio-170-api.zacharie.org".into(),
+            bucket: "thoth-screenshots".into(),
+            access_key: "joseph".into(),
+            secret_key: std::env::var("MINIO_SECRET_KEY").unwrap_or_default(),
+            region: "auto".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VisionConfig {
+    pub model: String,
+    pub hotkey: String,
+    pub system_prompt: String,
+}
+
+impl Default for VisionConfig {
+    fn default() -> Self {
+        Self {
+            model: "gemini-3.5-flash".into(),
+            hotkey: "Ctrl+Shift+Win+P".into(),
+            system_prompt: "Analyse cette image de fenêtre. Identifie les questions posées. Pour chaque question, trouve la réponse correcte. Si les choix de réponse comportent un préfixe (comme une lettre A, B, C... ou un numéro 1, 2, 3...), renvoie UNIQUEMENT la lettre ou le numéro correspondant à la réponse correcte. Sinon, renvoie la réponse sous la forme la plus concise possible. Ne fournis aucune phrase d'introduction ni explication.".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub pylos: PylosConfig,
     pub behavior: BehaviorConfig,
+    pub mqtt: MqttConfig,
+    pub s3: S3Config,
+    pub vision: VisionConfig,
 }
 
 #[cfg(windows)]
@@ -252,10 +316,15 @@ impl Config {
     }
 
     pub fn path() -> std::path::PathBuf {
-        let base = std::env::var("APPDATA")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
-        base.join("thoth").join("config.toml")
+        directories::ProjectDirs::from("org", "Thoth", "Thoth")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| {
+                std::env::var("APPDATA")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join("thoth")
+            })
+            .join("config.toml")
     }
 }
 
@@ -296,8 +365,16 @@ mod tests {
     #[test]
     fn test_config_path_construction() {
         let path = Config::path();
-        assert!(path.to_string_lossy().contains("thoth"));
-        assert!(path.to_string_lossy().ends_with("config.toml"));
+        let lossy = path.to_string_lossy().to_lowercase();
+        assert!(
+            lossy.contains("thoth"),
+            "path '{}' should contain 'thoth'",
+            path.display()
+        );
+        assert!(
+            path.to_string_lossy().ends_with("config.toml"),
+            "path should end with config.toml"
+        );
     }
 
     #[test]

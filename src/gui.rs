@@ -62,6 +62,7 @@ pub struct ThothGuiApp {
     status_ok: bool,
     is_loading: bool,
     original_text: String,
+    #[allow(dead_code)]
     active_window: *mut std::ffi::c_void,
 
     // Config
@@ -77,6 +78,25 @@ pub struct ThothGuiApp {
     hotkey: String,
     #[allow(dead_code)]
     log_path: String,
+
+    // MQTT config
+    mqtt_broker: String,
+    mqtt_username: String,
+    mqtt_password: String,
+    mqtt_topic: String,
+    mqtt_port: u16,
+    mqtt_use_tls: bool,
+
+    // S3 config
+    s3_endpoint: String,
+    s3_bucket: String,
+    #[allow(dead_code)]
+    s3_access_key: String,
+    s3_secret_key: String,
+
+    // Vision config
+    vision_model: String,
+    vision_hotkey: String,
 }
 
 impl ThothGuiApp {
@@ -109,6 +129,18 @@ impl ThothGuiApp {
             debounce_ms: config.behavior.debounce_ms,
             hotkey: config.behavior.hotkey.clone(),
             log_path: config.behavior.log_path.clone().unwrap_or_default(),
+            mqtt_broker: config.mqtt.broker.clone(),
+            mqtt_username: config.mqtt.username.clone(),
+            mqtt_password: config.mqtt.password.clone(),
+            mqtt_topic: config.mqtt.topic.clone(),
+            mqtt_port: config.mqtt.port,
+            mqtt_use_tls: config.mqtt.use_tls,
+            s3_endpoint: config.s3.endpoint.clone(),
+            s3_bucket: config.s3.bucket.clone(),
+            s3_access_key: config.s3.access_key.clone(),
+            s3_secret_key: config.s3.secret_key.clone(),
+            vision_model: config.vision.model.clone(),
+            vision_hotkey: config.vision.hotkey.clone(),
             config,
             prompt_input: String::new(),
             history,
@@ -145,6 +177,7 @@ impl ThothGuiApp {
             self.config.behavior.target_language.clone(),
         );
         let original = self.original_text.clone();
+        #[cfg(windows)]
         let active_window_addr = self.active_window as usize;
         let restore_clipboard = self.config.behavior.restore_clipboard;
 
@@ -494,6 +527,108 @@ impl ThothGuiApp {
                         );
                         ui.add_space(4.0);
                     }
+
+                    // ── MQTT Configuration ────────────────────────────────
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("MQTT Configuration")
+                            .color(TEXT_WHITE)
+                            .strong()
+                            .size(14.0),
+                    );
+                    ui.add_space(4.0);
+                    cfg_field(ui, "MQTT Broker", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.mqtt_broker)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "MQTT Username", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.mqtt_username)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "MQTT Password", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.mqtt_password)
+                                .password(true)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "MQTT Topic", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.mqtt_topic)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "MQTT Port", |ui| {
+                        ui.add(egui::DragValue::new(&mut self.mqtt_port).range(1..=65535));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.mqtt_use_tls, "");
+                        ui.label(egui::RichText::new("Use TLS").color(TEXT_WHITE).size(14.0));
+                    });
+
+                    // ── S3 Configuration ──────────────────────────────────
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("S3 / MinIO Configuration")
+                            .color(TEXT_WHITE)
+                            .strong()
+                            .size(14.0),
+                    );
+                    ui.add_space(4.0);
+                    cfg_field(ui, "S3 Endpoint", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.s3_endpoint)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "S3 Bucket", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.s3_bucket)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "S3 Secret Key", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.s3_secret_key)
+                                .password(true)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+
+                    // ── Vision Configuration ──────────────────────────────
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("Vision / Screenshot Analysis")
+                            .color(TEXT_WHITE)
+                            .strong()
+                            .size(14.0),
+                    );
+                    ui.add_space(4.0);
+                    cfg_field(ui, "Vision Model", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.vision_model)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
+                    cfg_field(ui, "Screenshot Hotkey", |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.vision_hotkey)
+                                .desired_width(f32::INFINITY)
+                                .text_color(TEXT_WHITE),
+                        );
+                    });
                 });
 
                 // Buttons — bottom right: Cancel (gray) | Save (green)
@@ -525,6 +660,20 @@ impl ThothGuiApp {
         self.config.behavior.show_notifications = self.show_notifications;
         self.config.behavior.debounce_ms = self.debounce_ms;
         self.config.behavior.hotkey = self.hotkey.clone();
+
+        self.config.mqtt.broker = self.mqtt_broker.clone();
+        self.config.mqtt.username = self.mqtt_username.clone();
+        self.config.mqtt.password = self.mqtt_password.clone();
+        self.config.mqtt.topic = self.mqtt_topic.clone();
+        self.config.mqtt.port = self.mqtt_port;
+        self.config.mqtt.use_tls = self.mqtt_use_tls;
+
+        self.config.s3.endpoint = self.s3_endpoint.clone();
+        self.config.s3.bucket = self.s3_bucket.clone();
+        self.config.s3.secret_key = self.s3_secret_key.clone();
+
+        self.config.vision.model = self.vision_model.clone();
+        self.config.vision.hotkey = self.vision_hotkey.clone();
 
         if let Err(e) = self.config.save() {
             self.status_msg = format!("Erreur : {e}");
@@ -799,6 +948,8 @@ fn load_history() -> Vec<String> {
 }
 
 fn save_history(history: &[String]) {
+    #[cfg(not(windows))]
+    let _ = history;
     #[cfg(windows)]
     {
         use winreg::RegKey;

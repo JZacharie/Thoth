@@ -4,25 +4,26 @@
   <img src="docs/images/hero-banner.png" alt="Thoth — Instant LLM text manipulation for Windows" width="100%">
 </p>
 
-> **Instant LLM-powered text manipulation for Windows — translate, reformulate, or execute custom prompts via global hotkeys.**  
-> **Manipulation de texte instantanée par LLM pour Windows — traduire, reformuler ou exécuter des instructions personnalisées via des raccourcis globaux.**
+> **Instant LLM-powered text manipulation for Windows, macOS & Linux — translate, reformulate, analyze screenshots, or execute custom prompts via global hotkeys.**  
+> **Manipulation de texte instantanée par LLM pour Windows, macOS et Linux — traduire, reformuler, analyser des captures d'écran ou exécuter des instructions personnalisées via des raccourcis globaux.**
 
 ---
 
 ## English
 
-**Thoth** is a lightweight Windows background application written in **Rust** that provides instant LLM-powered text manipulation — translation, reformulation, or custom prompts — via global hotkeys. Select text in any application, press a hotkey, and the text is replaced by the LLM response.
+**Thoth** is a lightweight cross-platform desktop application written in **Rust** that provides instant LLM-powered text manipulation — translation, reformulation, screenshot analysis, or custom prompts — via global hotkeys. Select text in any application, press a hotkey, and the text is replaced by the LLM response.
 
 ### Features
 
 #### Core
-- **4 Global Hotkeys** — configurable hotkey set; default: translate (`Ctrl+Shift+Win+N`), translate to English (`Ctrl+Shift+Win+,`), custom prompt GUI overlay (`Ctrl+Shift+Win+:`), reformulate (`Ctrl+Shift+Win+R`)
-- **Automatic Copy/Paste** — simulates `Ctrl+C` / `Ctrl+V` to capture and replace text in any application
+- **5 Global Hotkeys** — configurable hotkey set; default: translate (`Ctrl+Shift+Win+N`), translate to English (`Ctrl+Shift+Win+,`), custom prompt GUI overlay (`Ctrl+Shift+Win+:`), reformulate (`Ctrl+Shift+Win+R`), screenshot analysis (`Ctrl+Shift+Win+P`)
+- **Automatic Copy/Paste** — simulates `Ctrl+C` / `Ctrl+V` (Windows/macOS) to capture and replace text in any application
 - **10 Target Languages** — French, English, Spanish, German, Italian, Portuguese, Dutch, Japanese, Chinese, Russian
+- **Screenshot Analysis** — captures the active window, analyzes it with Gemini Vision via Pylos, and pastes the answer (with S3 upload & MQTT publishing)
 
-#### GUI (Native eframe/egui Windows)
-- **Prompt GUI** — executes custom user instruction on selected text, with history persistence (up/down arrows + click selection), saved in Windows Registry
-- **Config Editor** — edit all settings directly in-app (endpoint, model, hotkey, language, etc.)
+#### GUI (Native eframe/egui)
+- **Prompt GUI** — executes custom user instruction on selected text, with history persistence (up/down arrows + click selection), saved in OS registry (`HKCU\Software\Thoth`) on Windows
+- **Config Editor** — edit all settings directly in-app (endpoint, model, hotkey, language, MQTT, S3, Vision, etc.)
 - **Statistics Dashboard** — view translations count, errors, volume processed, average latency, per-model usage
 
 <p align="center">
@@ -34,9 +35,10 @@
 </p>
 
 #### Security
-- **DPAPI-Encrypted Configuration** — config is encrypted with Windows `CryptProtectData` and stored in `HKCU\Software\Thoth\Config` (REG_BINARY); no plaintext files on disk
+- **DPAPI-Encrypted Configuration** (Windows) — config is encrypted with Windows `CryptProtectData` and stored in `HKCU\Software\Thoth\Config` (REG_BINARY); no plaintext files on disk
+- **Keychain Integration** (macOS/Linux) — secrets stored via OS-native keyring (`keyring` crate)
 - **Enforced HTTPS** — non-localhost endpoints are automatically upgraded to `https://`; bypassable via `--insecure` flag for local development
-- **Authenticode Signature Verification** — `WinVerifyTrust` validates binary signature at startup (release builds only); execution is blocked if signature is invalid
+- **Authenticode Signature Verification** (Windows) — `WinVerifyTrust` validates binary signature at startup (release builds only); execution is blocked if signature is invalid
 - **Sensitive Data Detection** — blocks requests containing API keys (OpenAI `sk-`, `pk-`, AWS `AKIA`, GitHub `ghp_/gho_/ghu_/ghs_/ghr_`), JWTs, private keys (`-----BEGIN * PRIVATE KEY-----`), credit card numbers, Slack tokens (`xoxb-`, `xoxp-`), database URIs (`mongodb://`, `postgres://`, `mysql://`)
 - **Clipboard Preservation** — original clipboard content is restored after each operation
 
@@ -47,17 +49,23 @@
 
 #### Observability
 - **Redacted Logging** — never logs original or translated text; logs only lengths and content hashes
-- **Usage Metrics** — tracks translations, errors, latency, per-model usage (persisted as JSON)
-- **Windows Toast Notifications** — success, error, and warning alerts via `notify-rust`
+- **Usage Metrics** — tracks translations, errors, latency, per-model usage (persisted as JSON via `directories` crate)
+- **Notifications** — success, error, and warning alerts via native OS notifications
+
+#### Cross-Platform
+- **Windows** — full support (RegisterHotKey, DPAPI, tray icon, Authenticode, MSI installer)
+- **macOS** — full support (rdev global hotkeys, Keychain, LaunchAgent, `.app` bundle)
+- **Linux** — partial support (auto-start via `.desktop`, config file via XDG, text-based operations via CLI)
 
 ### Hotkey Reference
 
 | Action | Default Hotkey | Description |
-|---|---|---|
+|---|---|---|---|
 | Translate (default lang) | `Ctrl+Shift+Win+N` | Translates selected text to configured target language |
 | Translate to English | `Ctrl+Shift+Win+,` | Translates selected text to English |
 | Custom Prompt | `Ctrl+Shift+Win+:` | Opens GUI overlay — enter instruction, press Enter, result is pasted |
 | Reformulate | `Ctrl+Shift+Win+R` | Reformulates/rewrites selected text for clarity and style |
+| Screenshot Analysis | `Ctrl+Shift+Win+P` | Captures active window, analyzes via Gemini Vision, pastes answer |
 
 All hotkeys are configurable via `behavior.hotkey` in settings.
 
@@ -128,9 +136,10 @@ sequenceDiagram
 
 ### Prerequisites
 
-- **Windows 10/11** (x86_64) — the only supported platform
+- **Windows 10/11** (x86_64), **macOS** (aarch64), or **Linux** (x86_64, X11)
 - **Rust** toolchain (1.88+) — [rustup.rs](https://rustup.rs/)
 - A running instance of **Pylos** gateway (typically on port 3000) or any OpenAI-compatible API endpoint
+- For screenshot analysis: MinIO S3-compatible storage and EMQX MQTT broker (optional, configurable)
 
 ### Quick Start
 
@@ -176,6 +185,26 @@ restore_clipboard = true
 show_notifications = true
 debounce_ms = 500
 hotkey = "Ctrl+Shift+Win+N"
+
+[mqtt]
+broker = "mqtt-emqx.p.zacharie.org"
+username = "joseph"
+password = "<from MQTT_PASSWORD env or .env>"
+topic = "thoth/answers"
+port = 8883
+use_tls = true
+
+[s3]
+endpoint = "https://minio-170-api.zacharie.org"
+bucket = "thoth-screenshots"
+access_key = "joseph"
+secret_key = "<from MINIO_SECRET_KEY env or .env>"
+region = "auto"
+
+[vision]
+model = "gemini-3.5-flash"
+hotkey = "Ctrl+Shift+Win+P"
+system_prompt = "Analyse cette image de fenêtre..."
 ```
 
 Configured hotkey patterns: `Win`, `Ctrl`, `Alt`, `Shift` + letter (A-Z), number (0-9), `Space`, `F1`-`F24`, `Comma`, `Semicolon`, `Colon`.
@@ -210,17 +239,22 @@ Default level is `info`. Logs are written to `thoth.log` next to the executable.
 |---|---|---|
 | `src/main.rs` | — | Entry point, Tokio runtime, CLI args, signature verification, panic handler |
 | `src/lib.rs` | `thoth` | Public API re-exports; insecure mode global flag |
-| `src/config.rs` | `config` | Config structs, DPAPI encryption, registry storage (HKCU\Software\Thoth) |
-| `src/orchestrator.rs` | `orchestrator` | Main event loop: hotkey dispatch, text capture, LLM call, paste |
-| `src/clipboard.rs` | `clipboard` | Clipboard read/write + Ctrl+C/V simulation (rdev) |
+| `src/config.rs` | `config` | Config structs, DPAPI encryption, registry storage (HKCU\Software\Thoth), MQTT/S3/Vision configs |
+| `src/orchestrator.rs` | `orchestrator` | Main event loop: hotkey dispatch, text capture, LLM call, paste, screenshot analysis + MQTT |
+| `src/clipboard.rs` | `clipboard` | Clipboard read/write + Ctrl+C/V simulation (rdev), cross-platform key simulation |
 | `src/pylos_client.rs` | `pylos_client` | HTTP client, prompt builders, sensitive data filter, fallback logic |
-| `src/hotkey.rs` | `hotkey` | Windows global hotkey registration (RegisterHotKey), pattern parsing |
-| `src/gui.rs` | `gui` | eframe/egui native GUI: prompt with history, config editor, stats dashboard |
+| `src/hotkey.rs` | `hotkey` | Global hotkey registration: RegisterHotKey (Win), rdev (macOS), stub (Linux) |
+| `src/gui.rs` | `gui` | eframe/egui native GUI: prompt with history, config editor (incl. MQTT/S3/Vision), stats dashboard |
 | `src/dialog.rs` | `dialog` | Minimal eframe prompt dialog (legacy entry point for prompt mode) |
-| `src/tray.rs` | `tray` | System tray icon & menu (tray-icon crate) |
-| `src/notification.rs` | `notification` | Windows toast notifications (notify-rust) |
-| `src/metrics.rs` | `metrics` | Usage statistics persisted as JSON |
-| `src/auto_start.rs` | `auto_start` | Windows Registry auto-start (HKCU\Run) |
+| `src/tray.rs` | `tray` | System tray icon & menu (tray-icon crate) — Windows only |
+| `src/notification.rs` | `notification` | Native OS toast notifications |
+| `src/metrics.rs` | `metrics` | Usage statistics persisted as JSON via `directories` crate |
+| `src/auto_start.rs` | `auto_start` | Auto-start: Windows Registry, macOS LaunchAgent plist, Linux .desktop |
+| `src/secure_storage.rs` | `secure_storage` | OS-native keyring integration (macOS Keychain, Linux Secret Service) |
+| `src/screenshot.rs` | `screenshot` | Active window capture via xcap |
+| `src/vision.rs` | `vision` | Gemini Vision multimodal analysis via Pylos |
+| `src/s3_storage.rs` | `s3_storage` | MinIO S3 upload for screenshot images |
+| `src/mqtt.rs` | `mqtt` | EMQX MQTT publishing of analysis results |
 | `tests/integration.rs` | — | Integration tests with wiremock (HTTP mocking) |
 
 ### Security Review
@@ -241,13 +275,15 @@ Default level is `info`. Logs are written to `thoth.log` next to the executable.
 
 | Job | What | Trigger |
 |---|---|---|
-| `lint` | actionlint + typos | All pushes |
+| `lint` | actionlint + gitleaks (secret scanning) | All pushes |
 | `check` | fmt + clippy + tests + cargo-deny | All pushes |
 | `msrv` | Rust 1.88.0 compatibility | All pushes |
-| `build` | Release binary + artifact | All pushes |
+| `build-windows` | Release binary (x86_64-pc-windows-msvc) + artifact | All pushes |
+| `build-macos` | Release binary (aarch64-apple-darwin) + .app bundle | All pushes |
+| `build-linux` | Release binary (x86_64-unknown-linux-gnu) | All pushes |
 | `msi` | Nightly MSI installer (WiX) | Push to `main` |
 | `sign` | Authenticode code signing | Tags `v*` |
-| `release` | GitHub Release with assets | Tags `v*` |
+| `release` | GitHub Release with assets for all 3 platforms | Tags `v*` |
 
 ### License
 
@@ -257,14 +293,15 @@ MIT — see [LICENSE](LICENSE).
 
 ## Français
 
-**Thoth** est une application système légère écrite en **Rust** pour **Windows** qui permet la manipulation de texte instantanée via LLM — traduction, reformulation ou instructions personnalisées — grâce à des raccourcis clavier globaux. Sélectionnez du texte dans n'importe quelle application, appuyez sur un raccourci, et le texte est remplacé par la réponse du LLM.
+**Thoth** est une application système légère écrite en **Rust** pour **Windows, macOS et Linux** qui permet la manipulation de texte instantanée via LLM — traduction, reformulation, analyse de captures d'écran ou instructions personnalisées — grâce à des raccourcis clavier globaux. Sélectionnez du texte dans n'importe quelle application, appuyez sur un raccourci, et le texte est remplacé par la réponse du LLM.
 
 ### Fonctionnalités
 
 #### Générales
-- **4 Raccourcis Globaux** — jeu configurable ; défaut : traduire (`Ctrl+Shift+Win+N`), vers l'anglais (`Ctrl+Shift+Win+,`), console d'instruction personnalisée overlay (`Ctrl+Shift+Win+:`), reformuler (`Ctrl+Shift+Win+R`)
-- **Copier/Coller Automatique** — simule `Ctrl+C` / `Ctrl+V` dans n'importe quelle application
+- **5 Raccourcis Globaux** — jeu configurable ; défaut : traduire (`Ctrl+Shift+Win+N`), vers l'anglais (`Ctrl+Shift+Win+,`), console d'instruction personnalisée overlay (`Ctrl+Shift+Win+:`), reformuler (`Ctrl+Shift+Win+R`), analyse d'écran (`Ctrl+Shift+Win+P`)
+- **Copier/Coller Automatique** — simule `Ctrl+C` / `Ctrl+V` (ou `Cmd+C`/`Cmd+V` sur macOS) dans n'importe quelle application
 - **10 Langues Cibles** — français, anglais, espagnol, allemand, italien, portugais, néerlandais, japonais, chinois, russe
+- **Analyse d'Écran** — capture la fenêtre active, analyse via Gemini Vision (Pylos), colle la réponse (avec upload S3 et publication MQTT)
 
 #### GUI Native eframe/egui
 - **Console Instruction** — exécute une instruction personnalisée sur le texte sélectionné, avec historique persistant (navigation flèches haut/bas + clic), sauvegardé dans le registre Windows
@@ -281,20 +318,26 @@ MIT — see [LICENSE](LICENSE).
 
 #### Sécurité
 - **Configuration Chiffrée (DPAPI)** — config chiffrée via `CryptProtectData` dans `HKCU\Software\Thoth\Config` (REG_BINARY) ; plus aucun fichier en clair sur le disque
+- **Keychain Intégré** (macOS/Linux) — secrets stockés via le trousseau système natif
 - **HTTPS Imposé** — les endpoints non-localhost sont automatiquement passés en `https://` ; flag `--insecure` pour le développement local
-- **Vérification de Signature** — `WinVerifyTrust` valide la signature Authenticode au démarrage (release uniquement)
+- **Vérification de Signature** (Windows) — `WinVerifyTrust` valide la signature Authenticode au démarrage (release uniquement)
 - **Détection de Données Sensibles** — blocage des clés API (OpenAI, AWS, GitHub), JWT, clés privées, cartes bancaires, tokens Slack, URIs de bases de données
 - **Préservation du Presse-papier** — le contenu original est restauré après chaque opération
 
 #### Fiabilité
 - **Modèle de Secours** — tentative automatique avec un second modèle si le principal échoue
 - **Timeout Configurable** — 30 secondes par défaut
-- **Gestion de Panique** — dialogue d'erreur natif avec option d'ouverture du fichier de log
+- **Gestion de Panique** — dialogue d'erreur natif avec option d'ouverture du fichier de log (multiplateforme)
 
 #### Observabilité
 - **Journaux Caviardés** — aucun texte utilisateur ou LLM dans les logs ; seules les tailles et empreintes sont conservées
 - **Métriques d'Utilisation** — traductions, erreurs, latence, usage par modèle (JSON)
-- **Notifications Toast Windows** — succès, erreur et avertissement
+- **Notifications Toast** — notifications natives du système d'exploitation
+
+#### Multiplateforme
+- **Windows** — support complet (RegisterHotKey, DPAPI, icône de barre d'état, Authenticode, MSI)
+- **macOS** — support complet (raccourcis globaux rdev, Keychain, LaunchAgent, bundle `.app`)
+- **Linux** — support partiel (démarrage auto via `.desktop`, config via XDG, opérations textuelles via CLI)
 
 ### Raccourcis
 
@@ -304,6 +347,7 @@ MIT — see [LICENSE](LICENSE).
 | Traduire en anglais | `Ctrl+Shift+Win+,` | Traduit le texte sélectionné en anglais |
 | Instruction personnalisée | `Ctrl+Shift+Win+:` | Ouvre l'overlay GUI — saisissez l'instruction, Entrée valide |
 | Reformuler | `Ctrl+Shift+Win+R` | Reformule/réécrit le texte pour plus de clarté et de style |
+| Analyse d'écran | `Ctrl+Shift+Win+P` | Capture la fenêtre active, analyse via Gemini Vision, colle la réponse |
 
 Tous les raccourcis sont configurables via `behavior.hotkey`.
 
@@ -367,9 +411,10 @@ sequenceDiagram
 
 ### Prérequis
 
-- **Windows 10/11** (x86_64) — plateforme unique supportée
+- **Windows 10/11** (x86_64), **macOS** (aarch64), ou **Linux** (x86_64, X11)
 - **Rust** 1.88+ — [rustup.rs](https://rustup.rs/)
 - Une instance de la passerelle **Pylos** en cours d'exécution
+- Pour l'analyse d'écran : stockage MinIO S3 et broker MQTT EMQX (optionnel, configurable)
 
 ### Démarrage Rapide
 
@@ -415,6 +460,26 @@ restore_clipboard = true
 show_notifications = true
 debounce_ms = 500
 hotkey = "Ctrl+Shift+Win+N"
+
+[mqtt]
+broker = "mqtt-emqx.p.zacharie.org"
+username = "joseph"
+password = "<depuis MQTT_PASSWORD dans .env>"
+topic = "thoth/answers"
+port = 8883
+use_tls = true
+
+[s3]
+endpoint = "https://minio-170-api.zacharie.org"
+bucket = "thoth-screenshots"
+access_key = "joseph"
+secret_key = "<depuis MINIO_SECRET_KEY dans .env>"
+region = "auto"
+
+[vision]
+model = "gemini-3.5-flash"
+hotkey = "Ctrl+Shift+Win+P"
+system_prompt = "Analyse cette image de fenêtre..."
 ```
 
 **Éditer la config :** `thoth.exe --config` ou menu tray → Configuration.
@@ -425,17 +490,22 @@ hotkey = "Ctrl+Shift+Win+N"
 |---|---|---|
 | `src/main.rs` | — | Point d'entrée, runtime Tokio, args CLI, vérification signature |
 | `src/lib.rs` | `thoth` | Ré-exportations, flag global insecure |
-| `src/config.rs` | `config` | Structures, chiffrement DPAPI, stockage registre |
-| `src/orchestrator.rs` | `orchestrator` | Boucle principale : dispatch hotkey, capture, LLM, collage |
-| `src/clipboard.rs` | `clipboard` | Lecture/écriture presse-papier + simulation Ctrl+C/V |
+| `src/config.rs` | `config` | Structures, chiffrement DPAPI, stockage registre, configs MQTT/S3/Vision |
+| `src/orchestrator.rs` | `orchestrator` | Boucle principale : dispatch hotkey, capture, LLM, collage, analyse d'écran + MQTT |
+| `src/clipboard.rs` | `clipboard` | Lecture/écriture presse-papier + simulation Ctrl+C/V, simulation multi-OS |
 | `src/pylos_client.rs` | `pylos_client` | Client HTTP, prompts, filtre sensible, fallback |
-| `src/hotkey.rs` | `hotkey` | Enregistrement hotkey Windows, parsing |
-| `src/gui.rs` | `gui` | GUI native eframe/egui : prompt avec historique, config, stats |
+| `src/hotkey.rs` | `hotkey` | Enregistrement hotkey : RegisterHotKey (Win), rdev (macOS), stub (Linux) |
+| `src/gui.rs` | `gui` | GUI native eframe/egui : prompt avec historique, config (MQTT/S3/Vision), stats |
 | `src/dialog.rs` | `dialog` | Mini dialogue eframe (point d'entrée legacy) |
-| `src/tray.rs` | `tray` | Icône et menu barre d'état |
-| `src/notification.rs` | `notification` | Notifications Toast Windows |
-| `src/metrics.rs` | `metrics` | Statistiques d'utilisation (JSON) |
-| `src/auto_start.rs` | `auto_start` | Démarrage automatique (registre Windows) |
+| `src/tray.rs` | `tray` | Icône et menu barre d'état — Windows uniquement |
+| `src/notification.rs` | `notification` | Notifications natives du système d'exploitation |
+| `src/metrics.rs` | `metrics` | Statistiques d'utilisation (JSON) via `directories` |
+| `src/auto_start.rs` | `auto_start` | Démarrage auto : registre Windows, plist macOS, .desktop Linux |
+| `src/secure_storage.rs` | `secure_storage` | Intégration trousseau OS natif (Keychain macOS, Secret Service Linux) |
+| `src/screenshot.rs` | `screenshot` | Capture de la fenêtre active via xcap |
+| `src/vision.rs` | `vision` | Analyse multimodale Gemini Vision via Pylos |
+| `src/s3_storage.rs` | `s3_storage` | Upload MinIO S3 pour les captures d'écran |
+| `src/mqtt.rs` | `mqtt` | Publication MQTT EMQX des résultats d'analyse |
 | `tests/integration.rs` | — | Tests d'intégration avec wiremock |
 
 ### Licence

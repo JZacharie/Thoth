@@ -1,0 +1,8 @@
+title = "Thoth GitLeaks Configuration"
+
+[allowlist]
+description = "Allowlist for Thoth project"
+paths = [
+    ".env.example",
+    "docs/",
+]
