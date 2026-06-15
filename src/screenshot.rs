@@ -7,8 +7,7 @@ pub fn capture_active_window() -> Result<(Vec<u8>, String)> {
     let active = windows
         .iter()
         .find(|w| {
-            !w.is_minimized().unwrap_or(false)
-                && w.title().as_deref().unwrap_or("").contains("")
+            !w.is_minimized().unwrap_or(false) && w.title().as_deref().unwrap_or("").contains("")
         })
         .and_then(|_| {
             windows.iter().find(|w| {
