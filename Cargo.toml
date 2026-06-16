@@ -25,7 +25,7 @@ rfd = "0.17"
 directories = "6"
 keyring = { version = "3", features = ["apple-native", "sync-secret-service"] }
 xcap = { version = "0.4", features = ["vendored"] }
-rumqttc = { version = "0.24", default-features = false, features = ["websocket", "use-rustls"] }
+rumqttc = { version = "0.25", default-features = false, features = ["websocket", "use-rustls"] }
 base64 = "0.22"
 dotenvy = "0.15"
 uuid = { version = "1", features = ["v4"] }
