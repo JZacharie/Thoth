@@ -43,7 +43,7 @@ msi:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
