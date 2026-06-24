@@ -66,17 +66,17 @@ async fn main_inner() -> anyhow::Result<()> {
 
     #[cfg(windows)]
     {
-        if !cfg!(debug_assertions) && !thoth::is_insecure() {
-            if let Err(e) = verify_self_signature() {
-                tracing::error!(
-                    "Executable signature verification failed: {e}. Terminating for security."
-                );
-                thoth::notification::notify_error(&format!(
-                    "Erreur de sécurité : signature invalide. ({})",
-                    e
-                ));
-                std::process::exit(1);
-            }
+        if !cfg!(debug_assertions) && !thoth::is_insecure()
+            && let Err(e) = verify_self_signature()
+        {
+            tracing::error!(
+                "Executable signature verification failed: {e}. Terminating for security."
+            );
+            thoth::notification::notify_error(&format!(
+                "Erreur de sécurité : signature invalide. ({})",
+                e
+            ));
+            std::process::exit(1);
         }
     }
 
