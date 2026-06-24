@@ -141,12 +141,26 @@ jobs:
           SCCACHE_GHA_ENABLED: true
           RUSTFLAGS: "-C target-feature=+crt-static -C lto=yes -C codegen-units=1 -C opt-level=z"
 
+      - name: Self-sign binary (temporary self-signed cert)
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+          $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          $tempCertPath = [System.IO.Path]::GetTempFileName()
+          [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
+          Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
+          Copy-Item $tempCertPath target/x86_64-pc-windows-msvc/release/thoth-dev.cer
+          Remove-Item $tempCertPath
+          Set-AuthenticodeSignature -FilePath target/x86_64-pc-windows-msvc/release/thoth.exe -Certificate $cert | Out-Null
+          Write-Host "[OK] Binary self-signed"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: thoth-windows-x86_64
-          path: target/x86_64-pc-windows-msvc/release/thoth.exe
-          compression-level: 0
+          path: |
+            target/x86_64-pc-windows-msvc/release/thoth.exe
+            target/x86_64-pc-windows-msvc/release/thoth-dev.cer
 
   # ── Build (macOS) ────────────────────────────────────────────
   build-macos:
@@ -248,6 +262,21 @@ jobs:
       - name: Build MSI (WiX)
         run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
 
+      - name: Self-sign MSI (temporary self-signed cert)
+        shell: pwsh
+        run: |
+          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=ThothDev" } | Select-Object -First 1
+          if (-not $cert) {
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+            $tempCertPath = [System.IO.Path]::GetTempFileName()
+            [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
+            Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
+            Remove-Item $tempCertPath
+          }
+          Set-AuthenticodeSignature -FilePath ./Thoth-nightly.msi -Certificate $cert | Out-Null
+          Write-Host "[OK] MSI self-signed"
+
       - name: Upload MSI
         uses: actions/upload-artifact@v7
         with:
@@ -279,6 +308,21 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
           wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
+
+      - name: Self-sign MSI (temporary self-signed cert)
+        shell: pwsh
+        run: |
+          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=ThothDev" } | Select-Object -First 1
+          if (-not $cert) {
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+            $tempCertPath = [System.IO.Path]::GetTempFileName()
+            [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
+            Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
+            Remove-Item $tempCertPath
+          }
+          Set-AuthenticodeSignature -FilePath ./Thoth-${{ github.ref_name }}.msi -Certificate $cert | Out-Null
+          Write-Host "[OK] MSI self-signed"
 
       - name: Upload MSI
         uses: actions/upload-artifact@v7
@@ -327,7 +371,8 @@ jobs:
         run: |
           # Windows
           sha256sum ./release/windows/thoth.exe > ./release/windows/thoth.exe.sha256
-          zip -j thoth-windows-x86_64.zip ./release/windows/thoth.exe ./release/windows/thoth.exe.sha256
+          cp ./release/windows/thoth-dev.cer ./thoth-dev.cer
+          zip -j thoth-windows-x86_64.zip ./release/windows/thoth.exe ./release/windows/thoth.exe.sha256 ./release/windows/thoth-dev.cer
           # Linux
           sha256sum ./release/linux/thoth > ./release/linux/thoth.sha256
           tar -czf thoth-linux-x86_64.tar.gz -C ./release/linux thoth thoth.sha256
@@ -341,6 +386,7 @@ jobs:
             thoth-windows-x86_64.zip
             ./release/windows/thoth.exe
             ./release/windows/thoth.exe.sha256
+            ./release/windows/thoth-dev.cer
             ./release/Thoth-*.msi
             thoth-linux-x86_64.tar.gz
             ./release/linux/thoth
