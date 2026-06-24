@@ -165,6 +165,22 @@ cargo build --release
 ./target/release/thoth.exe --insecure
 ```
 
+### Download
+
+Pre-built binaries are available on the [GitHub Releases page](https://github.com/JZacharie/Thoth/releases).
+
+| Platform | Format | Artifact |
+|----------|--------|----------|
+| Windows (x86_64) | `.exe` + `.zip` | `thoth-windows-x86_64.zip` (includes `thoth.exe` + `thoth-dev.cer` + SHA256) |
+| Windows Installer | `.msi` | `Thoth-v*.msi` — WiX installer (per-machine) |
+| macOS (aarch64) | `.zip` | `thoth-macos-aarch64.zip` (Thoth.app bundle) |
+| Linux (x86_64) | `.tar.gz` | `thoth-linux-x86_64.tar.gz` (binary + SHA256) |
+
+Code signing for Windows binaries is provided by [SignPath Foundation](https://signpath.org/).  
+La signature des binaires Windows est fournie par [SignPath Foundation](https://signpath.org/).
+
+> **Note for Windows users:** The binary is currently self-signed during CI. Download `thoth-dev.cer`, install it in `Trusted Root Certification Authorities`, and Thoth will run without the `--insecure` flag. A proper SignPath certificate will replace the self-signed one in a future release.
+
 ### Configuration
 
 Thoth auto-generates a configuration with secure defaults on first run. On Windows, config is **encrypted via DPAPI** and stored in the registry — no plaintext files on disk.
@@ -278,11 +294,11 @@ Default level is `info`. Logs are written to `thoth.log` next to the executable.
 | `lint` | actionlint + gitleaks (secret scanning) | All pushes |
 | `check` | fmt + clippy + tests + cargo-deny | All pushes |
 | `msrv` | Rust 1.88.0 compatibility | All pushes |
-| `build-windows` | Release binary (x86_64-pc-windows-msvc) + artifact | All pushes |
+| `build-windows` | Release binary (x86_64-pc-windows-msvc) + self-signed + artifact | All pushes |
 | `build-macos` | Release binary (aarch64-apple-darwin) + .app bundle | All pushes |
 | `build-linux` | Release binary (x86_64-unknown-linux-gnu) | All pushes |
-| `msi` | Nightly MSI installer (WiX) | Push to `main` |
-| `sign` | Authenticode code signing | Tags `v*` |
+| `msi` | Nightly MSI installer (WiX) + self-signed | Push to `main` |
+| `msi-release` | Versioned MSI installer (WiX) + self-signed | Tags `v*` |
 | `release` | GitHub Release with assets for all 3 platforms | Tags `v*` |
 
 ### License
@@ -439,6 +455,22 @@ cargo build --release
 # Certificats auto-signés (dev local uniquement)
 ./target/release/thoth.exe --insecure
 ```
+
+### Téléchargement
+
+Les binaires pré-compilés sont disponibles sur la [page GitHub Releases](https://github.com/JZacharie/Thoth/releases).
+
+| Plateforme | Format | Fichier |
+|-----------|--------|---------|
+| Windows (x86_64) | `.exe` + `.zip` | `thoth-windows-x86_64.zip` (contient `thoth.exe` + `thoth-dev.cer` + SHA256) |
+| Windows Installer | `.msi` | `Thoth-v*.msi` — installateur WiX (per-machine) |
+| macOS (aarch64) | `.zip` | `thoth-macos-aarch64.zip` (bundle Thoth.app) |
+| Linux (x86_64) | `.tar.gz` | `thoth-linux-x86_64.tar.gz` (binaire + SHA256) |
+
+La signature des binaires Windows est fournie par [SignPath Foundation](https://signpath.org/).  
+Code signing for Windows binaries is provided by [SignPath Foundation](https://signpath.org/).
+
+> **Note pour les utilisateurs Windows :** Le binaire est actuellement auto-signé pendant la CI. Téléchargez `thoth-dev.cer`, installez-le dans `Autorités de certification racine de confiance`, et Thoth fonctionnera sans le flag `--insecure`. Un certificat SignPath approprié remplacera l'auto-signé dans une future version.
 
 ### Configuration
 
