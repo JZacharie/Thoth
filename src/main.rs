@@ -66,8 +66,7 @@ async fn main_inner() -> anyhow::Result<()> {
 
     #[cfg(windows)]
     {
-        if !cfg!(debug_assertions) {
-            #[allow(clippy::collapsible_if)]
+        if !cfg!(debug_assertions) && !thoth::is_insecure() {
             if let Err(e) = verify_self_signature() {
                 tracing::error!(
                     "Executable signature verification failed: {e}. Terminating for security."
