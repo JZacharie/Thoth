@@ -66,7 +66,8 @@ async fn main_inner() -> anyhow::Result<()> {
 
     #[cfg(windows)]
     {
-        if !cfg!(debug_assertions) && !thoth::is_insecure()
+        if !cfg!(debug_assertions)
+            && !thoth::is_insecure()
             && let Err(e) = verify_self_signature()
         {
             tracing::error!(
