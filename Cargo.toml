@@ -62,9 +62,7 @@ tray-icon = "0.24"
 notify-rust = "4"
 
 [profile.release]
-# opt-level, lto, codegen-units sont passés via RUSTFLAGS en CI
-# (lto=thin, codegen-units=4) pour préserver la compatibilité sccache.
-# Localement (cargo build --release) ces valeurs s'appliquent.
+# Profil rapide pour CI/dev : sccache-compatible, ~2-3 min
 opt-level = "z"
 lto = "thin"
 codegen-units = 4
@@ -74,5 +72,13 @@ panic = "abort"
 [profile.dev]
 opt-level = 0
 debug = true
+
+# Profil production pour les releases (tags v*) : binaire optimal
+# fat LTO + CU=1 = link-time optimization maximale, ~8-10 min acceptable
+[profile.release-opt]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+# strip et panic = "abort" hérités
 
 [workspace]

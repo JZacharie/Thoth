@@ -8,15 +8,17 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+  # Inclure le nom du workflow pour éviter les collisions entre branches et tags.
+  # cancel-in-progress=false sur les tags : une release ne doit jamais être annulée.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_REGISTRY_DEFAULT: sparse
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_INCREMENTAL: 0
-  CARGO_HOME: C:\Users\runneradmin\.cargo
+  # CARGO_HOME défini uniquement dans les jobs Windows (voir ci-dessous)
 
 jobs:
   # ── Pre-checks rapides (pas de compilation Rust) ──────────────
@@ -38,18 +40,37 @@ jobs:
         if: env.GITLEAKS_LICENSE != ''
         uses: gitleaks/gitleaks-action@v3
 
-  # ── Qualité + tests (1 compilation dev, outils dédiés) ──────
-  check:
-    name: Check & Test
-    runs-on: windows-latest
-    timeout-minutes: 20
+  # ── Formatage (ubuntu — rapide, pas de compilation) ─────────
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+  # ── Qualité + tests ───────────────────────────────────────────
+  check:
+    name: Check & Test
+    needs: [fmt]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CARGO_HOME: C:\Users\runneradmin\.cargo
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: sccache
         uses: mozilla-actions/sccache-action@v0.0.10
@@ -59,9 +80,6 @@ jobs:
         with:
           shared-key: windows-rust
           cache-on-failure: true
-
-      - name: Check formatting
-        run: cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -80,19 +98,25 @@ jobs:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: true
 
+      # cargo-deny uniquement sur main + tags (pas sur les PRs)
       - name: Install cargo-deny
+        if: github.event_name == 'push'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
 
       - name: Check licenses + advisories (cargo-deny)
+        if: github.event_name == 'push'
         run: cargo deny check
 
-  # ── Vérification MSRV ────────────────────────────────────────
+  # ── MSRV : uniquement sur main + tags (pas sur les PRs) ───────
   msrv:
     name: MSRV (1.92.0)
+    if: github.event_name == 'push'
     runs-on: windows-latest
     timeout-minutes: 10
+    env:
+      CARGO_HOME: C:\Users\runneradmin\.cargo
     steps:
       - uses: actions/checkout@v7
 
@@ -115,12 +139,18 @@ jobs:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: true
 
-  # ── Build release (Windows) ──────────────────────────────────
-  build-windows:
-    name: Build (Windows)
-    needs: [lint, check, msrv]
+  # ═══════════════════════════════════════════════════════════════
+  # ── FAST BUILD : PRs + push main (thin LTO, sccache) ─────────
+  # ═══════════════════════════════════════════════════════════════
+
+  build-windows-fast:
+    name: Build Windows (fast)
+    needs: [lint, check]
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    env:
+      CARGO_HOME: C:\Users\runneradmin\.cargo
     steps:
       - uses: actions/checkout@v7
 
@@ -131,47 +161,76 @@ jobs:
 
       - name: sccache
         uses: mozilla-actions/sccache-action@v0.0.10
-      - name: Cache Cargo (registry)
+
+      - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-rust
+          cache-on-failure: true
 
-      - name: Build release binary
+      - name: Build release (thin LTO, sccache)
         run: cargo build --release --target x86_64-pc-windows-msvc
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: true
-          # lto=thin : presque aussi bon que fat pour la taille, mais parallélisable et sccache-compatible
-          # codegen-units=4 : meilleur équilibre vitesse de compilation / optimisation
           RUSTFLAGS: "-C target-feature=+crt-static -C lto=thin -C codegen-units=4 -C opt-level=z"
 
-      - name: Export dev certificate (.cer)
-        shell: pwsh
-        run: |
-          # Crée un cert temporaire et exporte uniquement la clé publique (.cer)
-          # On NE signe PAS ici (évite les blocages CRL/OCSP en CI headless)
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-          $certBytes = $cert.RawData  # RawData = DER brut, équivalent à Export(Cert)
-          [System.IO.File]::WriteAllBytes("target/x86_64-pc-windows-msvc/release/thoth-dev.cer", $certBytes)
-          Write-Host "[OK] Certificate exported"
-
-      - name: Sign binary (push/tag only)
-        # Les PRs n'ont pas besoin de signature — évite les blocages réseau CRL/OCSP
+      - name: Sign & export certificate (fast)
+        # Si CODESIGN_PFX_B64 est défini : cert persistant (même clé à chaque build)
+        # Sinon : cert éphémère (nouveau keypair à chaque run — fallback)
         if: github.event_name == 'push'
         shell: pwsh
+        env:
+          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
+          CODESIGN_PFX_PWD: ${{ secrets.CODESIGN_PFX_PWD }}
         run: |
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-          # Exporter en PFX pour signtool
-          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
-          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
-            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
-          # signtool : /fd SHA256, pas de /tr (pas de timestamp = pas de réseau = pas de blocage)
+          $outDir  = "target/x86_64-pc-windows-msvc/release"
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-sign.pfx")
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q `
-            "target/x86_64-pc-windows-msvc/release/thoth.exe"
+
+          if ($env:CODESIGN_PFX_B64) {
+            # ── Cert persistant depuis GitHub Secrets ──────────────────
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+            $pfxPwd = $env:CODESIGN_PFX_PWD
+            # Extraire le .cer public depuis le PFX
+            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $pfxPwd)
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+            Write-Host "[OK] Persistent certificate loaded"
+          } else {
+            # ── Fallback : cert éphémère (clé différente à chaque run) ─
+            Write-Warning "CODESIGN_PFX_B64 not set — using ephemeral self-signed cert"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+            [IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+              [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+            $pfxPwd = "ci-dev-only"
+          }
+
+          & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPwd /q `
+            "$outDir/thoth.exe"
           Remove-Item $pfxPath -ErrorAction SilentlyContinue
           Write-Host "[OK] Binary signed (no timestamp)"
+
+      - name: Export .cer only (PR — no signing)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
+          CODESIGN_PFX_PWD: ${{ secrets.CODESIGN_PFX_PWD }}
+        run: |
+          $outDir  = "target/x86_64-pc-windows-msvc/release"
+          if ($env:CODESIGN_PFX_B64) {
+            $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-sign.pfx")
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $env:CODESIGN_PFX_PWD)
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+            Remove-Item $pfxPath -ErrorAction SilentlyContinue
+          } else {
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+          }
+          Write-Host "[OK] Certificate exported (PR — exe not signed)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -181,10 +240,85 @@ jobs:
             target/x86_64-pc-windows-msvc/release/thoth.exe
             target/x86_64-pc-windows-msvc/release/thoth-dev.cer
 
-  # ── Build (macOS) ────────────────────────────────────────────
-  build-macos:
-    name: Build (macOS)
+  # ═══════════════════════════════════════════════════════════════
+  # ── RELEASE BUILDS : tags v* uniquement ───────────────────────
+  # Profil release-opt (fat LTO, CU=1) — binaire optimal
+  # sccache désactivé (fat LTO incompatible avec le cache d'objets)
+  # ═══════════════════════════════════════════════════════════════
+
+  build-windows-release:
+    name: Build Windows (release-opt)
     needs: [lint, check, msrv]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CARGO_HOME: C:\Users\runneradmin\.cargo
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo registry (pas de target cache — fat LTO invalide les objets)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-win
+          cache-targets: false
+
+      - name: Build release-opt (fat LTO, CU=1)
+        # opt-level géré par [profile.release-opt] dans Cargo.toml (opt-level="z")
+        run: cargo build --profile release-opt --target x86_64-pc-windows-msvc
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+
+      - name: Sign & export certificate (release-opt)
+        shell: pwsh
+        env:
+          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
+          CODESIGN_PFX_PWD: ${{ secrets.CODESIGN_PFX_PWD }}
+        run: |
+          $outDir  = "target/x86_64-pc-windows-msvc/release-opt"
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-sign.pfx")
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
+
+          if ($env:CODESIGN_PFX_B64) {
+            # ── Cert persistant depuis GitHub Secrets ──────────────────
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+            $pfxPwd = $env:CODESIGN_PFX_PWD
+            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxPath, $pfxPwd)
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+            Write-Host "[OK] Persistent certificate loaded"
+          } else {
+            # ── Fallback : cert éphémère ───────────────────────────────
+            Write-Warning "CODESIGN_PFX_B64 not set — using ephemeral self-signed cert"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            [IO.File]::WriteAllBytes("$outDir/thoth-dev.cer", $cert.RawData)
+            [IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+              [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+            $pfxPwd = "ci-dev-only"
+          }
+
+          & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPwd /q `
+            "$outDir/thoth.exe"
+          Remove-Item $pfxPath -ErrorAction SilentlyContinue
+          Write-Host "[OK] Binary signed (no timestamp)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: thoth-windows-x86_64
+          path: |
+            target/x86_64-pc-windows-msvc/release-opt/thoth.exe
+            target/x86_64-pc-windows-msvc/release-opt/thoth-dev.cer
+
+  build-macos-release:
+    name: Build macOS (release-opt)
+    needs: [lint, check, msrv]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -195,23 +329,19 @@ jobs:
         with:
           targets: aarch64-apple-darwin
 
-      - name: sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
-      - name: Cache Cargo
+      - name: Cache Cargo registry
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: build-macos
+          shared-key: release-macos
+          cache-targets: false
 
-      - name: Build release binary
-        run: cargo build --release
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: true
+      - name: Build release-opt (fat LTO, CU=1)
+        run: cargo build --profile release-opt
 
       - name: Create macOS app bundle
         run: |
           mkdir -p Thoth.app/Contents/MacOS
-          cp target/release/thoth Thoth.app/Contents/MacOS/
+          cp target/release-opt/thoth Thoth.app/Contents/MacOS/
           cp resources/thoth.png Thoth.app/Contents/Resources/ 2>/dev/null || true
 
       - name: Upload artifact
@@ -221,10 +351,10 @@ jobs:
           path: Thoth.app
           compression-level: 0
 
-  # ── Build (Linux) ────────────────────────────────────────────
-  build-linux:
-    name: Build (Linux)
+  build-linux-release:
+    name: Build Linux (release-opt)
     needs: [lint, check, msrv]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -239,33 +369,29 @@ jobs:
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
-      - name: Cache Cargo
+      - name: Cache Cargo registry
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: build-linux
+          shared-key: release-linux
+          cache-targets: false
 
-      - name: Build release binary
-        run: cargo build --release
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: true
+      - name: Build release-opt (fat LTO, CU=1)
+        run: cargo build --profile release-opt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: thoth-linux-x86_64
-          path: target/release/thoth
+          path: target/release-opt/thoth
           compression-level: 0
 
-  # ── MSI (chaque push sur main, pas besoin de signature) ──────
+  # ── MSI nightly (push main) ───────────────────────────────────
   msi:
-    name: Build MSI
-    needs: [build-windows]
+    name: Build MSI (nightly)
+    needs: [build-windows-fast]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -278,21 +404,34 @@ jobs:
       - name: Install WiX CLI
         run: dotnet tool install --global wix
 
-      - name: Build MSI (WiX)
-        run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
+      - name: Extract version from Cargo.toml
+        id: ver
+        shell: bash
+        run: echo "version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
 
-      - name: Self-sign MSI
+      - name: Build MSI (WiX)
+        run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=${{ steps.ver.outputs.version }}
+
+      - name: Sign MSI (persistent cert)
         shell: pwsh
+        env:
+          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
+          CODESIGN_PFX_PWD: ${{ secrets.CODESIGN_PFX_PWD }}
         run: |
-          # Nouveau cert à chaque run — pas d'Import-Certificate dans Root (blocage CRL/OCSP)
-          $cert    = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
-          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
-            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
-          # signtool sans /tr : aucun appel réseau, signing < 1s
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-sign.pfx")
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q ./Thoth-nightly.msi
+          if ($env:CODESIGN_PFX_B64) {
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+            $pfxPwd = $env:CODESIGN_PFX_PWD
+          } else {
+            Write-Warning "CODESIGN_PFX_B64 not set — using ephemeral self-signed cert"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            [IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+              [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+            $pfxPwd = "ci-dev-only"
+          }
+          & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPwd /q ./Thoth-nightly.msi
           Remove-Item $pfxPath -ErrorAction SilentlyContinue
           Write-Host "[OK] MSI signed"
 
@@ -303,13 +442,13 @@ jobs:
           path: ./Thoth-nightly.msi
           compression-level: 0
 
-  # ── MSI signé (tags uniquement) ─────────────────────────────
+  # ── MSI release (tags v*) ─────────────────────────────────────
   msi-release:
     name: Build MSI (Release)
-    needs: [build-windows]
+    needs: [build-windows-release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -328,18 +467,26 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart('v')
           wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
 
-      - name: Self-sign MSI
+      - name: Sign MSI (persistent cert)
         shell: pwsh
+        env:
+          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
+          CODESIGN_PFX_PWD: ${{ secrets.CODESIGN_PFX_PWD }}
         run: |
-          # Nouveau cert à chaque run — pas d'Import-Certificate dans Root (blocage CRL/OCSP)
-          $cert    = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
-          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
-            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
-          # signtool sans /tr : aucun appel réseau, signing < 1s
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-sign.pfx")
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q ./Thoth-${{ github.ref_name }}.msi
+          if ($env:CODESIGN_PFX_B64) {
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+            $pfxPwd = $env:CODESIGN_PFX_PWD
+          } else {
+            Write-Warning "CODESIGN_PFX_B64 not set — using ephemeral self-signed cert"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+            [IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+              [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+            $pfxPwd = "ci-dev-only"
+          }
+          & $signtool sign /fd SHA256 /f $pfxPath /p $pfxPwd /q ./Thoth-${{ github.ref_name }}.msi
           Remove-Item $pfxPath -ErrorAction SilentlyContinue
           Write-Host "[OK] MSI signed"
 
@@ -353,14 +500,14 @@ jobs:
   # ── GitHub Release (tags uniquement) ─────────────────────────
   release:
     name: Publish Release
-    needs: [build-windows, build-macos, build-linux, msi-release]
+    needs: [build-windows-release, build-macos-release, build-linux-release, msi-release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      # Pas de checkout : ce job ne compile rien, il ne télécharge qu'des artefacts
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v8
