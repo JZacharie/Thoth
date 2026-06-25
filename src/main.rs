@@ -8,6 +8,13 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
+#[cfg(windows)]
+use windows_sys::Win32::Security::Cryptography::{
+    CertAddEncodedCertificateToStore, CertCloseStore, CertDeleteCertificateFromStore,
+    CertOpenStore, CERT_CONTEXT, CERT_STORE_ADD_REPLACE_EXISTING, CERT_STORE_PROV_SYSTEM_W,
+    CERT_SYSTEM_STORE_CURRENT_USER, HCERTSTORE, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+};
+
 fn init_logger(
     config: &Config,
 ) -> (
@@ -400,8 +407,6 @@ fn verify_self_signature() -> anyhow::Result<()> {
 
 #[cfg(windows)]
 fn install_dev_cert(exe_path: &std::path::Path) -> anyhow::Result<CertStoreGuard> {
-    use windows_sys::Win32::Security::Cryptography::*;
-
     let cert_path = exe_path.with_file_name("thoth-dev.cer");
     let cert_bytes = std::fs::read(&cert_path)
         .map_err(|e| anyhow::anyhow!("Failed to read thoth-dev.cer: {e}"))?;
