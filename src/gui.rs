@@ -1,5 +1,5 @@
 use eframe::egui;
-use eframe::egui::{Color32, FontId, Rounding, Stroke, Vec2};
+use eframe::egui::{Color32, CornerRadius, FontId, Stroke, Vec2};
 
 use crate::clipboard::ClipboardManager;
 use crate::config::Config;
@@ -36,8 +36,8 @@ const C_PURPLE: Color32 = Color32::from_rgb(168, 114, 242); // Volume
 const BAR_BLUE: Color32 = Color32::from_rgb(88, 130, 213);
 const BAR_GREEN: Color32 = Color32::from_rgb(63, 185, 80);
 
-const PAD: f32 = 20.0;
-const ROUNDING: f32 = 8.0;
+const PAD: i8 = 20;
+const ROUNDING: u8 = 8;
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
 
@@ -221,10 +221,10 @@ fn apply_theme(ctx: &egui::Context) {
     vis.extreme_bg_color = BG_FIELD;
     vis.faint_bg_color = BG_CARD;
     vis.code_bg_color = BG_FIELD;
-    vis.window_rounding = Rounding::same(10.0);
+    vis.window_corner_radius = CornerRadius::same(10);
     vis.window_stroke = Stroke::new(1.0_f32, BORDER);
 
-    let r = Rounding::same(ROUNDING);
+    let r = CornerRadius::same(ROUNDING);
     for w in [
         &mut vis.widgets.noninteractive,
         &mut vis.widgets.inactive,
@@ -232,7 +232,7 @@ fn apply_theme(ctx: &egui::Context) {
         &mut vis.widgets.active,
         &mut vis.widgets.open,
     ] {
-        w.rounding = r;
+        w.corner_radius = r;
     }
     vis.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
     vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, TEXT_WHITE);
@@ -253,7 +253,7 @@ fn apply_theme(ctx: &egui::Context) {
 
     ctx.set_visuals(vis);
 
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
     style
         .text_styles
         .insert(egui::TextStyle::Body, FontId::proportional(14.0));
@@ -268,8 +268,8 @@ fn apply_theme(ctx: &egui::Context) {
         .insert(egui::TextStyle::Small, FontId::proportional(12.5));
     style.spacing.item_spacing = Vec2::new(8.0, 8.0);
     style.spacing.button_padding = Vec2::new(14.0, 8.0);
-    style.spacing.window_margin = egui::Margin::same(0.0);
-    ctx.set_style(style);
+    style.spacing.window_margin = egui::Margin::same(0i8);
+    ctx.set_global_style(style);
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -291,17 +291,17 @@ impl ThothGuiApp {
     fn draw_prompt(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
             .show(ctx, |ui| {
                 // ── Textarea ──────────────────────────────────────────────
-                let input_frame = egui::Frame::none()
+                let input_frame = egui::Frame::NONE
                     .fill(BG_CARD)
                     .stroke(Stroke::new(1.0_f32, BORDER))
-                    .rounding(Rounding::same(ROUNDING))
-                    .inner_margin(egui::Margin::same(12.0));
+                    .corner_radius(CornerRadius::same(ROUNDING))
+                    .inner_margin(egui::Margin::same(12i8));
 
                 input_frame.show(ui, |ui| {
                     let hint = egui::RichText::new(
@@ -311,7 +311,7 @@ impl ThothGuiApp {
 
                     let te = egui::TextEdit::multiline(&mut self.prompt_input)
                         .hint_text(hint)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .desired_width(ui.available_width())
                         .desired_rows(5)
                         .text_color(TEXT_WHITE)
@@ -379,7 +379,7 @@ impl ThothGuiApp {
 
                                 if resp.hovered() || is_sel {
                                     ui.painter()
-                                        .rect_filled(rect, Rounding::same(4.0), BG_HOVER);
+                                        .rect_filled(rect, CornerRadius::same(4), BG_HOVER);
                                 }
 
                                 // Italic history item
@@ -447,7 +447,7 @@ impl ThothGuiApp {
     fn draw_config(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
@@ -688,7 +688,7 @@ impl ThothGuiApp {
     fn draw_stats(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
@@ -786,7 +786,7 @@ fn blue_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
     } else {
         ACCENT_BLUE
     };
-    ui.painter().rect_filled(rect, Rounding::same(6.0), color);
+    ui.painter().rect_filled(rect, CornerRadius::same(6), color);
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -804,7 +804,7 @@ fn green_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
     } else {
         ACCENT_GREEN
     };
-    ui.painter().rect_filled(rect, Rounding::same(6.0), color);
+    ui.painter().rect_filled(rect, CornerRadius::same(6), color);
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -822,9 +822,9 @@ fn gray_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
     } else {
         Color32::from_rgb(45, 52, 68)
     };
-    ui.painter().rect_filled(rect, Rounding::same(6.0), bg);
+    ui.painter().rect_filled(rect, CornerRadius::same(6), bg);
     ui.painter()
-        .rect_stroke(rect, Rounding::same(6.0), Stroke::new(1.0_f32, BORDER));
+        .rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Middle);
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -849,9 +849,9 @@ fn cfg_field(ui: &mut egui::Ui, label: &str, content: impl FnOnce(&mut egui::Ui)
 fn stat_card(ui: &mut egui::Ui, label: &str, value: &str, value_color: Color32, w: f32, h: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(w, h), egui::Sense::hover());
     ui.painter()
-        .rect_filled(rect, Rounding::same(ROUNDING), BG_CARD);
+        .rect_filled(rect, CornerRadius::same(ROUNDING), BG_CARD);
     ui.painter()
-        .rect_stroke(rect, Rounding::same(ROUNDING), Stroke::new(1.0_f32, BORDER));
+        .rect_stroke(rect, CornerRadius::same(ROUNDING), Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Middle);
 
     // Label at top-centre
     ui.painter().text(
@@ -890,11 +890,11 @@ fn model_usage_bar(ui: &mut egui::Ui, model: &str, count: u64, pct: f32, color: 
         // Bar background + fill
         let (rect, _) = ui.allocate_exact_size(Vec2::new(bar_area, bar_h), egui::Sense::hover());
         ui.painter()
-            .rect_filled(rect, Rounding::same(4.0), BG_FIELD);
+            .rect_filled(rect, CornerRadius::same(4), BG_FIELD);
         let fill_w = (bar_area * pct).max(0.0);
         if fill_w > 0.0 {
             let fill = egui::Rect::from_min_size(rect.min, Vec2::new(fill_w, bar_h));
-            ui.painter().rect_filled(fill, Rounding::same(4.0), color);
+            ui.painter().rect_filled(fill, CornerRadius::same(4), color);
         }
 
         // Percentage label
