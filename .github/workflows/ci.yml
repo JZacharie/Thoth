@@ -15,6 +15,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_REGISTRY_DEFAULT: sparse
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_INCREMENTAL: 0
+  CARGO_HOME: C:\Users\runneradmin\.cargo
 
 jobs:
   # ── Pre-checks rapides (pas de compilation Rust) ──────────────
@@ -55,7 +57,7 @@ jobs:
       - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: check
+          shared-key: windows-rust
           cache-on-failure: true
 
       - name: Check formatting
@@ -132,27 +134,44 @@ jobs:
       - name: Cache Cargo (registry)
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: build-win
+          shared-key: windows-rust
 
       - name: Build release binary
         run: cargo build --release --target x86_64-pc-windows-msvc
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: true
-          RUSTFLAGS: "-C target-feature=+crt-static -C lto=yes -C codegen-units=1 -C opt-level=z"
+          # lto=thin : presque aussi bon que fat pour la taille, mais parallélisable et sccache-compatible
+          # codegen-units=4 : meilleur équilibre vitesse de compilation / optimisation
+          RUSTFLAGS: "-C target-feature=+crt-static -C lto=thin -C codegen-units=4 -C opt-level=z"
 
-      - name: Self-sign binary (temporary self-signed cert)
+      - name: Export dev certificate (.cer)
+        shell: pwsh
+        run: |
+          # Crée un cert temporaire et exporte uniquement la clé publique (.cer)
+          # On NE signe PAS ici (évite les blocages CRL/OCSP en CI headless)
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+          $certBytes = $cert.RawData  # RawData = DER brut, équivalent à Export(Cert)
+          [System.IO.File]::WriteAllBytes("target/x86_64-pc-windows-msvc/release/thoth-dev.cer", $certBytes)
+          Write-Host "[OK] Certificate exported"
+
+      - name: Sign binary (push/tag only)
+        # Les PRs n'ont pas besoin de signature — évite les blocages réseau CRL/OCSP
+        if: github.event_name == 'push'
         shell: pwsh
         run: |
           $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-          $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-          $tempCertPath = [System.IO.Path]::GetTempFileName()
-          [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
-          Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
-          Copy-Item $tempCertPath target/x86_64-pc-windows-msvc/release/thoth-dev.cer
-          Remove-Item $tempCertPath
-          Set-AuthenticodeSignature -FilePath target/x86_64-pc-windows-msvc/release/thoth.exe -Certificate $cert | Out-Null
-          Write-Host "[OK] Binary self-signed"
+          # Exporter en PFX pour signtool
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
+          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+          # signtool : /fd SHA256, pas de /tr (pas de timestamp = pas de réseau = pas de blocage)
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q `
+            "target/x86_64-pc-windows-msvc/release/thoth.exe"
+          Remove-Item $pfxPath -ErrorAction SilentlyContinue
+          Write-Host "[OK] Binary signed (no timestamp)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
