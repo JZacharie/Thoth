@@ -8,7 +8,12 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
-fn init_logger(config: &Config) -> (tracing_appender::non_blocking::WorkerGuard, std::path::PathBuf) {
+fn init_logger(
+    config: &Config,
+) -> (
+    tracing_appender::non_blocking::WorkerGuard,
+    std::path::PathBuf,
+) {
     let log_file = if let Some(ref path_str) = config.behavior.log_path {
         PathBuf::from(path_str)
     } else {
