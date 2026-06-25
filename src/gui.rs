@@ -275,12 +275,12 @@ fn apply_theme(ctx: &egui::Context) {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 impl eframe::App for ThothGuiApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        apply_theme(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        apply_theme(ui.ctx());
         match self.mode {
-            GuiMode::Prompt => self.draw_prompt(ctx),
-            GuiMode::Config => self.draw_config(ctx),
-            GuiMode::Stats => self.draw_stats(ctx),
+            GuiMode::Prompt => self.draw_prompt(ui),
+            GuiMode::Config => self.draw_config(ui),
+            GuiMode::Stats => self.draw_stats(ui),
         }
     }
 }
@@ -288,14 +288,14 @@ impl eframe::App for ThothGuiApp {
 // ── Prompt panel ─────────────────────────────────────────────────────────────
 
 impl ThothGuiApp {
-    fn draw_prompt(&mut self, ctx: &egui::Context) {
+    fn draw_prompt(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // ── Textarea ──────────────────────────────────────────────
                 let input_frame = egui::Frame::NONE
                     .fill(BG_CARD)
@@ -322,7 +322,7 @@ impl ThothGuiApp {
 
                 // ── Keyboard navigation ───────────────────────────────────
                 let hlen = self.history.len();
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                     self.selected_history_index = match self.selected_history_index {
                         None if hlen > 0 => Some(0),
                         Some(i) => Some((i + 1).min(hlen - 1)),
@@ -332,7 +332,7 @@ impl ThothGuiApp {
                         self.prompt_input = self.history[i].clone();
                     }
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
                     self.selected_history_index = match self.selected_history_index {
                         None if hlen > 0 => Some(hlen - 1),
                         Some(0) => {
@@ -348,10 +348,10 @@ impl ThothGuiApp {
                 }
 
                 // Enter (without Shift) to execute
-                if ctx.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift) {
+                if ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift) {
                     let val = self.prompt_input.clone();
                     if !val.trim().is_empty() {
-                        self.run_instruction(ctx, val);
+                        self.run_instruction(ui.ctx(), val);
                     }
                 }
 
@@ -410,7 +410,7 @@ impl ThothGuiApp {
                         });
 
                     if let Some(item) = clicked {
-                        self.run_instruction(ctx, item);
+                        self.run_instruction(ui.ctx(), item);
                     }
                 }
 
@@ -435,7 +435,7 @@ impl ThothGuiApp {
                     if blue_button(ui, "Execute", 110.0, 36.0) {
                         let val = self.prompt_input.clone();
                         if !val.trim().is_empty() {
-                            self.run_instruction(ctx, val);
+                            self.run_instruction(ui.ctx(), val);
                         }
                     }
                 });
@@ -444,14 +444,14 @@ impl ThothGuiApp {
 
     // ── Config panel ──────────────────────────────────────────────────────────
 
-    fn draw_config(&mut self, ctx: &egui::Context) {
+    fn draw_config(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     // Each field: label above, full-width input below
                     cfg_field(ui, "Endpoint", |ui| {
@@ -685,14 +685,14 @@ impl ThothGuiApp {
 
     // ── Stats panel ───────────────────────────────────────────────────────────
 
-    fn draw_stats(&mut self, ctx: &egui::Context) {
+    fn draw_stats(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 let metrics = UsageMetrics::load();
                 let avail_w = ui.available_width();
                 let card_w = (avail_w - 12.0) / 2.0;
@@ -823,8 +823,12 @@ fn gray_button(ui: &mut egui::Ui, label: &str, w: f32, h: f32) -> bool {
         Color32::from_rgb(45, 52, 68)
     };
     ui.painter().rect_filled(rect, CornerRadius::same(6), bg);
-    ui.painter()
-        .rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Middle);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::same(6),
+        Stroke::new(1.0_f32, BORDER),
+        egui::StrokeKind::Middle,
+    );
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -850,8 +854,12 @@ fn stat_card(ui: &mut egui::Ui, label: &str, value: &str, value_color: Color32, 
     let (rect, _) = ui.allocate_exact_size(Vec2::new(w, h), egui::Sense::hover());
     ui.painter()
         .rect_filled(rect, CornerRadius::same(ROUNDING), BG_CARD);
-    ui.painter()
-        .rect_stroke(rect, CornerRadius::same(ROUNDING), Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Middle);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::same(ROUNDING),
+        Stroke::new(1.0_f32, BORDER),
+        egui::StrokeKind::Middle,
+    );
 
     // Label at top-centre
     ui.painter().text(

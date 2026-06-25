@@ -20,7 +20,7 @@ tracing-appender = "0.2"
 time = "=0.3.51"
 sys-locale = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
-eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts"] }
+eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 rfd = "0.17"
 directories = "6"
 keyring = { version = "3", features = ["apple-native", "sync-secret-service"] }

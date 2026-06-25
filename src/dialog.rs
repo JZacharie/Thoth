@@ -19,8 +19,8 @@ pub fn show_prompt_dialog() -> Result<String> {
     }
 
     impl eframe::App for App {
-        fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-            eframe::egui::CentralPanel::default().show(ctx, |ui| {
+        fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
+            eframe::egui::CentralPanel::default().show_inside(ui, |ui| {
                 ui.label("Entrez votre instruction personnalisée :");
                 let resp = ui.text_edit_singleline(&mut self.input);
                 resp.request_focus();
@@ -32,10 +32,12 @@ pub fn show_prompt_dialog() -> Result<String> {
                     {
                         let mut res = self.result.lock().unwrap();
                         *res = Some(self.input.clone());
-                        ctx.send_viewport_cmd(eframe::egui::ViewportCommand::Close);
+                        ui.ctx()
+                            .send_viewport_cmd(eframe::egui::ViewportCommand::Close);
                     }
                     if ui.button("Annuler").clicked() {
-                        ctx.send_viewport_cmd(eframe::egui::ViewportCommand::Close);
+                        ui.ctx()
+                            .send_viewport_cmd(eframe::egui::ViewportCommand::Close);
                     }
                 });
             });
