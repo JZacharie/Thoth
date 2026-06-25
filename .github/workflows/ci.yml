@@ -343,12 +343,13 @@ jobs:
           mkdir -p Thoth.app/Contents/MacOS
           cp target/release-opt/thoth Thoth.app/Contents/MacOS/
           cp resources/thoth.png Thoth.app/Contents/Resources/ 2>/dev/null || true
+          tar -czf thoth-macos.tar.gz Thoth.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: thoth-macos-aarch64
-          path: Thoth.app
+          path: thoth-macos.tar.gz
           compression-level: 0
 
   build-linux-release:
@@ -543,6 +544,7 @@ jobs:
           sha256sum ./release/linux/thoth > ./release/linux/thoth.sha256
           tar -czf thoth-linux-x86_64.tar.gz -C ./release/linux thoth thoth.sha256
           # macOS
+          tar -xzf ./release/macos/thoth-macos.tar.gz -C ./release/macos/
           zip -r thoth-macos-aarch64.zip ./release/macos/Thoth.app
 
       - name: Create GitHub Release
