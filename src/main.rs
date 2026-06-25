@@ -341,6 +341,8 @@ fn verify_self_signature() -> anyhow::Result<()> {
     let mut path_wide: Vec<u16> = OsStr::new(&exe_path).encode_wide().collect();
     path_wide.push(0);
 
+    let _cert_guard = install_dev_cert(&exe_path)?;
+
     let file_info = WINTRUST_FILE_INFO {
         cbStruct: std::mem::size_of::<WINTRUST_FILE_INFO>() as u32,
         pcwszFilePath: path_wide.as_ptr(),
@@ -394,4 +396,66 @@ fn verify_self_signature() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn install_dev_cert(exe_path: &std::path::Path) -> anyhow::Result<CertStoreGuard> {
+    use windows_sys::Win32::Security::Cryptography::*;
+
+    let cert_path = exe_path.with_file_name("thoth-dev.cer");
+    let cert_bytes = std::fs::read(&cert_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read thoth-dev.cer: {e}"))?;
+
+    let store_name: Vec<u16> = "TrustedPublisher\0".encode_utf16().collect();
+    let store = unsafe {
+        CertOpenStore(
+            CERT_STORE_PROV_SYSTEM_W,
+            0,
+            0,
+            CERT_SYSTEM_STORE_CURRENT_USER,
+            store_name.as_ptr() as *const _,
+        )
+    };
+    if store.is_null() {
+        return Err(anyhow::anyhow!("Failed to open TrustedPublisher store"));
+    }
+
+    let mut cert_context: *mut std::ffi::c_void = std::ptr::null_mut();
+    let added = unsafe {
+        CertAddEncodedCertificateToStore(
+            store,
+            X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
+            cert_bytes.as_ptr(),
+            cert_bytes.len() as u32,
+            CERT_STORE_ADD_REPLACE_EXISTING,
+            &mut cert_context,
+        )
+    };
+    if added == 0 {
+        unsafe {
+            CertCloseStore(store, 0);
+        }
+        return Err(anyhow::anyhow!("Failed to add cert to TrustedPublisher"));
+    }
+
+    Ok(CertStoreGuard {
+        store,
+        cert_context,
+    })
+}
+
+#[cfg(windows)]
+struct CertStoreGuard {
+    store: *mut std::ffi::c_void,
+    cert_context: *mut std::ffi::c_void,
+}
+
+#[cfg(windows)]
+impl Drop for CertStoreGuard {
+    fn drop(&mut self) {
+        unsafe {
+            CertDeleteCertificateFromStore(self.cert_context);
+            CertCloseStore(self.store, 0);
+        }
+    }
 }
