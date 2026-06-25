@@ -407,7 +407,7 @@ jobs:
       - name: Extract version from Cargo.toml
         id: ver
         shell: bash
-        run: echo "version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
+        run: echo "version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
 
       - name: Build MSI (WiX)
         run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=${{ steps.ver.outputs.version }}

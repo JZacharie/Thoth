@@ -8,6 +8,35 @@ use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
+fn init_logger(config: &Config) -> (tracing_appender::non_blocking::WorkerGuard, std::path::PathBuf) {
+    let log_file = if let Some(ref path_str) = config.behavior.log_path {
+        PathBuf::from(path_str)
+    } else {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."));
+        exe_dir.join("thoth.log")
+    };
+
+    if let Some(parent) = log_file.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    let file_appender =
+        tracing_appender::rolling::never(log_file.parent().unwrap(), log_file.file_name().unwrap());
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(non_blocking)
+        .init();
+
+    (guard, log_file)
+}
+
 fn show_crash_dialog(message: &str, log_path: &std::path::Path) {
     use rfd::MessageButtons;
 
@@ -36,25 +65,18 @@ fn show_crash_dialog(message: &str, log_path: &std::path::Path) {
 
 #[tokio::main]
 async fn main() {
-    let result = main_inner().await;
+    let config = Config::load().unwrap_or_default();
+    let (_guard, log_file) = init_logger(&config);
+
+    let result = main_inner(log_file.clone()).await;
     if let Err(ref e) = result {
         tracing::error!("Fatal error: {:?}", e);
-        let config = Config::load().unwrap_or_default();
-        let log_file = if let Some(ref path_str) = config.behavior.log_path {
-            PathBuf::from(path_str)
-        } else {
-            let exe_dir = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(PathBuf::from))
-                .unwrap_or_else(|| PathBuf::from("."));
-            exe_dir.join("thoth.log")
-        };
         show_crash_dialog(&format!("Erreur fatale : {}", e), &log_file);
         std::process::exit(1);
     }
 }
 
-async fn main_inner() -> anyhow::Result<()> {
+async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
 
     let args: Vec<String> = std::env::args().collect();
@@ -157,31 +179,6 @@ async fn main_inner() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let log_file = if let Some(ref path_str) = config.behavior.log_path {
-        PathBuf::from(path_str)
-    } else {
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(PathBuf::from))
-            .unwrap_or_else(|| PathBuf::from("."));
-        exe_dir.join("thoth.log")
-    };
-
-    if let Some(parent) = log_file.parent() {
-        std::fs::create_dir_all(parent).ok();
-    }
-
-    let file_appender =
-        tracing_appender::rolling::never(log_file.parent().unwrap(), log_file.file_name().unwrap());
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .with_writer(non_blocking)
-        .init();
-
     let log_file_for_panic = log_file.clone();
     std::panic::set_hook(Box::new(move |info| {
         let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
@@ -200,8 +197,6 @@ async fn main_inner() -> anyhow::Result<()> {
 
         show_crash_dialog(&msg, &log_file_for_panic);
     }));
-
-    tracing::info!("Thoth v{} starting", env!("CARGO_PKG_VERSION"));
 
     let mut config = config;
     if config.pylos.secret.is_empty() {
