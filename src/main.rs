@@ -420,7 +420,7 @@ fn install_dev_cert(exe_path: &std::path::Path) -> anyhow::Result<CertStoreGuard
         return Err(anyhow::anyhow!("Failed to open TrustedPublisher store"));
     }
 
-    let mut cert_context: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut cert_context: *mut CERT_CONTEXT = std::ptr::null_mut();
     let added = unsafe {
         CertAddEncodedCertificateToStore(
             store,
@@ -446,8 +446,8 @@ fn install_dev_cert(exe_path: &std::path::Path) -> anyhow::Result<CertStoreGuard
 
 #[cfg(windows)]
 struct CertStoreGuard {
-    store: *mut std::ffi::c_void,
-    cert_context: *mut std::ffi::c_void,
+    store: HCERTSTORE,
+    cert_context: *mut CERT_CONTEXT,
 }
 
 #[cfg(windows)]
