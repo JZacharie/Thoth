@@ -390,7 +390,10 @@ jobs:
             ./release/Thoth-*.msi
             thoth-linux-x86_64.tar.gz
             ./release/linux/thoth
+            ./release/linux/thoth.sha256
             thoth-macos-aarch64.zip
           generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
