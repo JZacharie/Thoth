@@ -3,7 +3,7 @@ name = "thoth"
 version = "1.2.0"
 edition = "2024"
 license = "MIT"
-rust-version = "1.88"
+rust-version = "1.92"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -17,10 +17,10 @@ anyhow = "1"
 toml = "1.1"
 regex = "1"
 tracing-appender = "0.2"
-time = "=0.3.49"
+time = "=0.3.51"
 sys-locale = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
-eframe = { version = "0.29", default-features = false, features = ["glow", "default_fonts"] }
+eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts"] }
 rfd = "0.17"
 directories = "6"
 keyring = { version = "3", features = ["apple-native", "sync-secret-service"] }
@@ -62,9 +62,12 @@ tray-icon = "0.24"
 notify-rust = "4"
 
 [profile.release]
+# opt-level, lto, codegen-units sont passés via RUSTFLAGS en CI
+# (lto=thin, codegen-units=4) pour préserver la compatibilité sccache.
+# Localement (cargo build --release) ces valeurs s'appliquent.
 opt-level = "z"
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 4
 strip = true
 panic = "abort"
 

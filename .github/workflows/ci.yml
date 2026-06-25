@@ -90,16 +90,16 @@ jobs:
 
   # ── Vérification MSRV ────────────────────────────────────────
   msrv:
-    name: MSRV (1.88.0)
+    name: MSRV (1.92.0)
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Rust (1.88.0)
+      - name: Install Rust (1.92.0)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.88.0
+          toolchain: 1.92.0
 
       - name: sccache
         uses: mozilla-actions/sccache-action@v0.0.10
@@ -281,20 +281,20 @@ jobs:
       - name: Build MSI (WiX)
         run: wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-nightly.msi -d ThothBinary=./release/thoth.exe -d version=0.1.0
 
-      - name: Self-sign MSI (temporary self-signed cert)
+      - name: Self-sign MSI
         shell: pwsh
         run: |
-          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=ThothDev" } | Select-Object -First 1
-          if (-not $cert) {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-            $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-            $tempCertPath = [System.IO.Path]::GetTempFileName()
-            [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
-            Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
-            Remove-Item $tempCertPath
-          }
-          Set-AuthenticodeSignature -FilePath ./Thoth-nightly.msi -Certificate $cert | Out-Null
-          Write-Host "[OK] MSI self-signed"
+          # Nouveau cert à chaque run — pas d'Import-Certificate dans Root (blocage CRL/OCSP)
+          $cert    = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
+          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+          # signtool sans /tr : aucun appel réseau, signing < 1s
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q ./Thoth-nightly.msi
+          Remove-Item $pfxPath -ErrorAction SilentlyContinue
+          Write-Host "[OK] MSI signed"
 
       - name: Upload MSI
         uses: actions/upload-artifact@v7
@@ -328,20 +328,20 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart('v')
           wix build -acceptEula wix7 ./installer/Thoth.wxs -o ./Thoth-${{ github.ref_name }}.msi -d ThothBinary=./release/thoth.exe -d version=$version
 
-      - name: Self-sign MSI (temporary self-signed cert)
+      - name: Self-sign MSI
         shell: pwsh
         run: |
-          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=ThothDev" } | Select-Object -First 1
-          if (-not $cert) {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
-            $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-            $tempCertPath = [System.IO.Path]::GetTempFileName()
-            [System.IO.File]::WriteAllBytes($tempCertPath, $certBytes)
-            Import-Certificate -FilePath $tempCertPath -CertStoreLocation Cert:\CurrentUser\Root *>$null
-            Remove-Item $tempCertPath
-          }
-          Set-AuthenticodeSignature -FilePath ./Thoth-${{ github.ref_name }}.msi -Certificate $cert | Out-Null
-          Write-Host "[OK] MSI self-signed"
+          # Nouveau cert à chaque run — pas d'Import-Certificate dans Root (blocage CRL/OCSP)
+          $cert    = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=ThothDev" -CertStoreLocation Cert:\CurrentUser\My
+          $pfxPath = [System.IO.Path]::Combine($env:RUNNER_TEMP, "thoth-dev.pfx")
+          [System.IO.File]::WriteAllBytes($pfxPath, $cert.Export(
+            [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "ci-dev-only"))
+          # signtool sans /tr : aucun appel réseau, signing < 1s
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f $pfxPath /p "ci-dev-only" /q ./Thoth-${{ github.ref_name }}.msi
+          Remove-Item $pfxPath -ErrorAction SilentlyContinue
+          Write-Host "[OK] MSI signed"
 
       - name: Upload MSI
         uses: actions/upload-artifact@v7
