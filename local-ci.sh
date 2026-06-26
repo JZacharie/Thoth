@@ -52,20 +52,45 @@ echo
 check "cargo fmt" cargo fmt --all --check
 check "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
 
-# Vérifie si le linkeur peut trouver les bibliothèques système (xcb, dbus, etc.)
-if pkg-config --exists xcb 2>/dev/null; then
+# Vérifie les bibliothèques système requises sur Linux (xcb, xi, gtk, xkbcommon…)
+LINUX_DEPS_OK=true
+if [[ "$(uname -s)" == "Linux" ]]; then
+    MISSING_PKGS=()
+    for lib in xcb xi gtk+-3.0 xkbcommon xtst; do
+        if ! pkg-config --exists "$lib" 2>/dev/null; then
+            MISSING_PKGS+=("$lib")
+            LINUX_DEPS_OK=false
+        fi
+    done
+    # libxdo n'a pas de fichier .pc — vérification via ldconfig
+    if ! ldconfig -p 2>/dev/null | grep -q "libxdo\.so"; then
+        MISSING_PKGS+=("libxdo")
+        LINUX_DEPS_OK=false
+    fi
+    if [ "$LINUX_DEPS_OK" = false ]; then
+        echo -e "${RED}✗ Dépendances système Linux manquantes : ${MISSING_PKGS[*]}${NC}"
+        echo -e "${YELLOW}  → Installe-les avec :${NC}"
+        echo -e "${YELLOW}    sudo apt-get install -y \\${NC}"
+        echo -e "${YELLOW}      libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \\${NC}"
+        echo -e "${YELLOW}      libxcb1-dev libx11-dev libxi-dev libxtst-dev libxdo-dev \\${NC}"
+        echo -e "${YELLOW}      libxkbcommon-dev \\${NC}"
+        echo -e "${YELLOW}      libgtk-3-dev libatk1.0-dev libcairo2-dev libglib2.0-dev libpango1.0-dev \\${NC}"
+        echo -e "${YELLOW}      libssl-dev pkg-config${NC}"
+        echo -e "${YELLOW}  → Tests+build sautés. Exécute cargo check comme substitut.${NC}"
+        check "cargo check (lib, no-link)" cargo check --lib
+        check "cargo check (release equivalent)" cargo check --release
+    fi
+fi
+
+if [ "$LINUX_DEPS_OK" = true ]; then
     if command -v cargo-nextest &>/dev/null; then
         check "cargo nextest" cargo nextest run --workspace --no-fail-fast
     else
         check "cargo test" cargo test --workspace --all-features
     fi
     check "cargo build --release" cargo build --release
-else
-    echo -e "${YELLOW}⚠ libxcb non trouvé — tests+build sautés (sudo apt install libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev)${NC}"
-    echo -e "${YELLOW}⚠ Exécute cargo test --lib et cargo check --lib comme substitut${NC}"
-    check "cargo test (lib, no-link)" cargo check --lib
-    check "cargo check (release equivalent)" cargo check --release
 fi
+
 
 # --- Outils de la CI (exécutés si installés en local) ---
 

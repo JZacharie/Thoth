@@ -100,11 +100,16 @@ pub fn start(
         let _ = pattern;
         platform_macos::start(tx, enabled)
     }
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = (tx, pattern, enabled);
         tracing::warn!("global hotkeys not supported on this platform");
         Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = pattern;
+        platform_linux::start(tx, enabled)
     }
 }
 
@@ -346,6 +351,132 @@ mod platform_macos {
                                     if tx_clone.try_send(action).is_err() {
                                         tracing::warn!("hotkey channel full, dropping event");
                                     }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }) {
+                tracing::error!("rdev listen failed: {e:?}");
+            }
+        });
+
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod platform_linux {
+    use anyhow::Result;
+    use rdev::{EventType, Key, listen};
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::mpsc;
+
+    use super::HotkeyAction;
+
+    fn modifier_from_key(key: &Key) -> Option<&'static str> {
+        match key {
+            Key::ControlLeft | Key::ControlRight => Some("ctrl"),
+            Key::Alt | Key::AltGr => Some("alt"),
+            Key::ShiftLeft | Key::ShiftRight => Some("shift"),
+            Key::MetaLeft | Key::MetaRight | Key::Unknown(133) | Key::Unknown(134) => Some("win"),
+            _ => None,
+        }
+    }
+
+    fn key_to_str(key: &Key) -> Option<&'static str> {
+        match key {
+            Key::KeyA => Some("a"),
+            Key::KeyB => Some("b"),
+            Key::KeyC => Some("c"),
+            Key::KeyD => Some("d"),
+            Key::KeyE => Some("e"),
+            Key::KeyF => Some("f"),
+            Key::KeyG => Some("g"),
+            Key::KeyH => Some("h"),
+            Key::KeyI => Some("i"),
+            Key::KeyJ => Some("j"),
+            Key::KeyK => Some("k"),
+            Key::KeyL => Some("l"),
+            Key::KeyM => Some("m"),
+            Key::KeyN => Some("n"),
+            Key::KeyO => Some("o"),
+            Key::KeyP => Some("p"),
+            Key::KeyQ => Some("q"),
+            Key::KeyR => Some("r"),
+            Key::KeyS => Some("s"),
+            Key::KeyT => Some("t"),
+            Key::KeyU => Some("u"),
+            Key::KeyV => Some("v"),
+            Key::KeyW => Some("w"),
+            Key::KeyX => Some("x"),
+            Key::KeyY => Some("y"),
+            Key::KeyZ => Some("z"),
+            Key::Num0 => Some("0"),
+            Key::Num1 => Some("1"),
+            Key::Num2 => Some("2"),
+            Key::Num3 => Some("3"),
+            Key::Num4 => Some("4"),
+            Key::Num5 => Some("5"),
+            Key::Num6 => Some("6"),
+            Key::Num7 => Some("7"),
+            Key::Num8 => Some("8"),
+            Key::Num9 => Some("9"),
+            Key::Comma => Some(","),
+            Key::SemiColon => Some(";"),
+            _ => None,
+        }
+    }
+
+    pub fn start(tx: mpsc::Sender<HotkeyAction>, enabled: Arc<AtomicBool>) -> Result<()> {
+        let pressed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+        let tx_clone = tx.clone();
+        let enabled_clone = enabled.clone();
+
+        std::thread::spawn(move || {
+            if let Err(e) = listen(move |event| {
+                if !enabled_clone.load(Ordering::Relaxed) {
+                    return;
+                }
+
+                match event.event_type {
+                    EventType::KeyPress(key) => {
+                        if let Some(mod_name) = modifier_from_key(&key) {
+                            pressed.lock().unwrap().insert(mod_name.to_string());
+                        }
+                        if let Some(key_name) = key_to_str(&key) {
+                            pressed.lock().unwrap().insert(key_name.to_string());
+                        }
+                    }
+                    EventType::KeyRelease(key) => {
+                        if let Some(mod_name) = modifier_from_key(&key) {
+                            pressed.lock().unwrap().remove(mod_name);
+                        }
+                        if let Some(key_name) = key_to_str(&key) {
+                            let mut p = pressed.lock().unwrap();
+                            p.remove(key_name);
+
+                            // Check for Ctrl+Shift+Win/Super+<key> combinations
+                            let has_ctrl = p.contains("ctrl");
+                            let has_shift = p.contains("shift");
+                            let has_win = p.contains("win");
+
+                            if has_ctrl && has_shift && has_win {
+                                let action = match key_name {
+                                    "n" => Some(HotkeyAction::TranslateDefault),
+                                    "," => Some(HotkeyAction::TranslateEnglish),
+                                    ";" => Some(HotkeyAction::ExecuteInstruction),
+                                    "r" => Some(HotkeyAction::Reformulate),
+                                    "p" => Some(HotkeyAction::ScreenshotAnalysis),
+                                    _ => None,
+                                };
+                                if let Some(action) = action
+                                    && tx_clone.try_send(action).is_err()
+                                {
+                                    tracing::warn!("hotkey channel full, dropping event");
                                 }
                             }
                         }

@@ -55,7 +55,7 @@
 #### Cross-Platform
 - **Windows** — full support (RegisterHotKey, DPAPI, tray icon, Authenticode, MSI installer)
 - **macOS** — full support (rdev global hotkeys, Keychain, LaunchAgent, `.app` bundle)
-- **Linux** — partial support (auto-start via `.desktop`, config file via XDG, text-based operations via CLI)
+- **Linux** — full support on X11 (rdev global hotkeys, Secret Service keyring, `.desktop` autostart, tray icon via AppIndicator)
 
 ### Hotkey Reference
 
@@ -140,6 +140,29 @@ sequenceDiagram
 - **Rust** toolchain (1.88+) — [rustup.rs](https://rustup.rs/)
 - A running instance of **Pylos** gateway (typically on port 3000) or any OpenAI-compatible API endpoint
 - For screenshot analysis: MinIO S3-compatible storage and EMQX MQTT broker (optional, configurable)
+
+#### Linux System Dependencies (Ubuntu/Debian)
+
+Before building on Linux, install the required system libraries:
+
+```bash
+sudo apt-get install -y \
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb1-dev libx11-dev \
+  libxi-dev libxtst-dev libxdo-dev \
+  libxkbcommon-dev \
+  libgtk-3-dev libatk1.0-dev libcairo2-dev libglib2.0-dev libpango1.0-dev \
+  libssl-dev pkg-config
+```
+
+For global hotkeys to work, `rdev` needs access to input devices. If hotkeys don't fire, add your user to the `input` group and log out/in:
+
+```bash
+sudo usermod -aG input $USER
+# then log out and back in, or run: newgrp input
+```
+
+> **Wayland note:** Global hotkeys via `rdev` work on **X11** sessions. On Wayland, hotkeys are not captured globally due to security restrictions. Use your desktop environment's native shortcut manager to bind `thoth --prompt` / `thoth` to a key combination instead.
 
 ### Quick Start
 
@@ -259,7 +282,7 @@ Default level is `info`. Logs are written to `thoth.log` next to the executable.
 | `src/orchestrator.rs` | `orchestrator` | Main event loop: hotkey dispatch, text capture, LLM call, paste, screenshot analysis + MQTT |
 | `src/clipboard.rs` | `clipboard` | Clipboard read/write + Ctrl+C/V simulation (rdev), cross-platform key simulation |
 | `src/pylos_client.rs` | `pylos_client` | HTTP client, prompt builders, sensitive data filter, fallback logic |
-| `src/hotkey.rs` | `hotkey` | Global hotkey registration: RegisterHotKey (Win), rdev (macOS), stub (Linux) |
+| `src/hotkey.rs` | `hotkey` | Global hotkey registration: RegisterHotKey (Win), rdev (macOS/Linux) |
 | `src/gui.rs` | `gui` | eframe/egui native GUI: prompt with history, config editor (incl. MQTT/S3/Vision), stats dashboard |
 | `src/dialog.rs` | `dialog` | Minimal eframe prompt dialog (legacy entry point for prompt mode) |
 | `src/tray.rs` | `tray` | System tray icon & menu (tray-icon crate) — Windows + macOS |
@@ -353,7 +376,7 @@ MIT — see [LICENSE](LICENSE).
 #### Multiplateforme
 - **Windows** — support complet (RegisterHotKey, DPAPI, icône de barre d'état, Authenticode, MSI)
 - **macOS** — support complet (raccourcis globaux rdev, Keychain, LaunchAgent, bundle `.app`)
-- **Linux** — support partiel (démarrage auto via `.desktop`, config via XDG, opérations textuelles via CLI)
+- **Linux** — support complet sur X11 (raccourcis globaux rdev, Secret Service keyring, démarrage auto `.desktop`, icône tray via AppIndicator)
 
 ### Raccourcis
 
@@ -431,6 +454,29 @@ sequenceDiagram
 - **Rust** 1.88+ — [rustup.rs](https://rustup.rs/)
 - Une instance de la passerelle **Pylos** en cours d'exécution
 - Pour l'analyse d'écran : stockage MinIO S3 et broker MQTT EMQX (optionnel, configurable)
+
+#### Dépendances système Linux (Ubuntu/Debian)
+
+Avant de compiler sur Linux, installez les bibliothèques système requises :
+
+```bash
+sudo apt-get install -y \
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb1-dev libx11-dev \
+  libxi-dev libxtst-dev libxdo-dev \
+  libxkbcommon-dev \
+  libgtk-3-dev libatk1.0-dev libcairo2-dev libglib2.0-dev libpango1.0-dev \
+  libssl-dev pkg-config
+```
+
+Pour que les raccourcis globaux fonctionnent, `rdev` a besoin d'accéder aux périphériques d'entrée. Si les raccourcis ne répondent pas, ajoutez votre utilisateur au groupe `input` et reconnectez-vous :
+
+```bash
+sudo usermod -aG input $USER
+# puis déconnectez-vous et reconnectez-vous, ou exécutez : newgrp input
+```
+
+> **Note Wayland :** Les raccourcis globaux via `rdev` fonctionnent en session **X11**. Sous Wayland, la capture globale est bloquée pour des raisons de sécurité. Utilisez le gestionnaire de raccourcis natif de votre environnement (GNOME, KDE…) pour associer `thoth --prompt` ou `thoth` à une combinaison de touches.
 
 ### Démarrage Rapide
 
@@ -526,7 +572,7 @@ system_prompt = "Analyse cette image de fenêtre..."
 | `src/orchestrator.rs` | `orchestrator` | Boucle principale : dispatch hotkey, capture, LLM, collage, analyse d'écran + MQTT |
 | `src/clipboard.rs` | `clipboard` | Lecture/écriture presse-papier + simulation Ctrl+C/V, simulation multi-OS |
 | `src/pylos_client.rs` | `pylos_client` | Client HTTP, prompts, filtre sensible, fallback |
-| `src/hotkey.rs` | `hotkey` | Enregistrement hotkey : RegisterHotKey (Win), rdev (macOS), stub (Linux) |
+| `src/hotkey.rs` | `hotkey` | Enregistrement hotkey : RegisterHotKey (Win), rdev (macOS/Linux) |
 | `src/gui.rs` | `gui` | GUI native eframe/egui : prompt avec historique, config (MQTT/S3/Vision), stats |
 | `src/dialog.rs` | `dialog` | Mini dialogue eframe (point d'entrée legacy) |
 | `src/tray.rs` | `tray` | Icône et menu barre d'état — Windows + macOS |

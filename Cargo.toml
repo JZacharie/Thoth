@@ -23,8 +23,8 @@ image = { version = "0.25", default-features = false, features = ["png", "ico"] 
 eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 rfd = "0.17"
 directories = "6"
-keyring = { version = "3", features = ["apple-native", "sync-secret-service"] }
-xcap = { version = "0.4", features = ["vendored"] }
+keyring = { version = "3" }
+xcap = "0.4"
 rumqttc = { version = "0.25", default-features = false, features = ["websocket", "use-rustls"] }
 base64 = "0.22"
 dotenvy = "0.15"
@@ -42,9 +42,6 @@ wiremock = "0.6"
 winresource = "0.1"
 
 [target.'cfg(windows)'.dependencies]
-rdev = "0.5"
-notify-rust = "4"
-tray-icon = "0.24"
 winreg = "0.56"
 windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
@@ -56,7 +53,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
 ] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(windows, target_os = "macos", target_os = "linux"))'.dependencies]
 rdev = "0.5"
 tray-icon = "0.24"
 notify-rust = "4"

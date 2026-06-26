@@ -1,4 +1,4 @@
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 mod tray_impl {
     use anyhow::Result;
     use std::path::PathBuf;
@@ -162,6 +162,8 @@ mod tray_impl {
             .spawn();
         #[cfg(target_os = "macos")]
         let _ = std::process::Command::new("Console").arg(log_path).spawn();
+        #[cfg(target_os = "linux")]
+        let _ = std::process::Command::new("xdg-open").arg(log_path).spawn();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -314,23 +316,55 @@ mod tray_impl {
         let mut shutdown_tx = Some(shutdown_tx);
 
         loop {
-            match MenuEvent::receiver().recv_timeout(std::time::Duration::from_millis(200)) {
-                Ok(event) => {
-                    if handle_menu_event(
-                        &event.id,
-                        &items,
-                        &tray,
-                        &enabled,
-                        &color_icon,
-                        &grayscale_icon,
-                        &mut shutdown_tx,
-                        &log_path,
-                        &s,
-                    ) {
-                        break;
-                    }
+            if let Ok(event) =
+                MenuEvent::receiver().recv_timeout(std::time::Duration::from_millis(200))
+            {
+                if handle_menu_event(
+                    &event.id,
+                    &items,
+                    &tray,
+                    &enabled,
+                    &color_icon,
+                    &grayscale_icon,
+                    &mut shutdown_tx,
+                    &log_path,
+                    &s,
+                ) {
+                    break;
                 }
-                Err(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn start(
+        shutdown_tx: oneshot::Sender<()>,
+        enabled: Arc<AtomicBool>,
+        log_path: PathBuf,
+        _config_path: PathBuf,
+    ) -> Result<()> {
+        let (color_icon, grayscale_icon) = load_icons()?;
+        let (tray, items, s) = build_tray(&enabled, &color_icon, &grayscale_icon)?;
+        let mut shutdown_tx = Some(shutdown_tx);
+
+        loop {
+            if let Ok(event) =
+                MenuEvent::receiver().recv_timeout(std::time::Duration::from_millis(200))
+                && handle_menu_event(
+                    &event.id,
+                    &items,
+                    &tray,
+                    &enabled,
+                    &color_icon,
+                    &grayscale_icon,
+                    &mut shutdown_tx,
+                    &log_path,
+                    &s,
+                )
+            {
+                break;
             }
         }
 
@@ -338,16 +372,16 @@ mod tray_impl {
     }
 }
 
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 pub use tray_impl::start;
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn start(
     _shutdown_tx: tokio::sync::oneshot::Sender<()>,
     _enabled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     _log_path: std::path::PathBuf,
     _config_path: std::path::PathBuf,
 ) -> anyhow::Result<()> {
-    tracing::warn!("system tray not supported on Linux (no GTK)");
+    tracing::warn!("system tray not supported on this platform");
     Ok(())
 }
