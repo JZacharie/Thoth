@@ -345,11 +345,16 @@ mod tray_impl {
         log_path: PathBuf,
         _config_path: PathBuf,
     ) -> Result<()> {
+        gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
         let (color_icon, grayscale_icon) = load_icons()?;
         let (tray, items, s) = build_tray(&enabled, &color_icon, &grayscale_icon)?;
         let mut shutdown_tx = Some(shutdown_tx);
 
         loop {
+            while gtk::events_pending() {
+                gtk::main_iteration();
+            }
+
             if let Ok(event) =
                 MenuEvent::receiver().recv_timeout(std::time::Duration::from_millis(200))
                 && handle_menu_event(

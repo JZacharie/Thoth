@@ -21,6 +21,7 @@ pub struct PylosConfig {
     pub model: String,
     pub fallback_model: Option<String>,
     pub timeout_secs: u64,
+    #[serde(default)]
     pub secret: String,
 }
 
@@ -30,8 +31,8 @@ impl Default for PylosConfig {
             endpoint: "https://pylos-dev.p.zacharie.org".into(),
             model: "gemini4:e2b".into(),
             fallback_model: Some("gemma4:12b".into()),
-            timeout_secs: 30,
-            secret: "your_secret_key_here".into(),
+            timeout_secs: 120,
+            secret: std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default(),
         }
     }
 }
@@ -268,18 +269,30 @@ mod win_secure {
 }
 
 impl Config {
+    fn resolve_secrets(mut config: Config) -> Config {
+        if config.pylos.secret.is_empty() {
+            config.pylos.secret = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
+        }
+        if config.mqtt.password.is_empty() {
+            config.mqtt.password = std::env::var("MQTT_PASSWORD").unwrap_or_default();
+        }
+        if config.s3.secret_key.is_empty() {
+            config.s3.secret_key = std::env::var("MINIO_SECRET_KEY").unwrap_or_default();
+        }
+        config
+    }
+
     pub fn load() -> anyhow::Result<Self> {
         #[cfg(windows)]
         {
             if let Ok(Some(content)) = win_secure::load_from_registry() {
                 #[allow(clippy::collapsible_if)]
                 if let Ok(config) = toml::from_str::<Config>(&content) {
-                    return Ok(config);
+                    return Ok(Self::resolve_secrets(config));
                 }
             }
         }
 
-        // Migration ou fallback sur fichier plat
         let config_path = Self::path();
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
@@ -287,9 +300,9 @@ impl Config {
             #[cfg(windows)]
             {
                 let _ = win_secure::save_to_registry(&content);
-                let _ = std::fs::remove_file(&config_path); // Supprime le fichier plat non sécurisé
+                let _ = std::fs::remove_file(&config_path);
             }
-            Ok(config)
+            Ok(Self::resolve_secrets(config))
         } else {
             let config = Config::default();
             config.save()?;
@@ -339,7 +352,8 @@ mod tests {
         assert_eq!(cfg.model, "gemini4:e2b");
         assert_eq!(cfg.fallback_model, Some("gemma4:12b".into()));
         assert_eq!(cfg.timeout_secs, 30);
-        assert_eq!(cfg.secret, "your_secret_key_here");
+        let env_val = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
+        assert_eq!(cfg.secret, env_val);
     }
 
     #[test]

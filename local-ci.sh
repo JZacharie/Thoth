@@ -63,7 +63,7 @@ if [[ "$(uname -s)" == "Linux" ]]; then
         fi
     done
     # libxdo n'a pas de fichier .pc — vérification via ldconfig
-    if ! ldconfig -p 2>/dev/null | grep -q "libxdo\.so"; then
+    if ! grep -q "libxdo\.so" <<< "$(ldconfig -p 2>/dev/null)"; then
         MISSING_PKGS+=("libxdo")
         LINUX_DEPS_OK=false
     fi
@@ -102,34 +102,22 @@ fi
 
 if command -v typos &>/dev/null; then
     check "typos" typos
-else
-    echo -e "${YELLOW}⚠ typos non installé — saute (cargo install typos-cli)${NC}"
 fi
 
 if command -v cargo-deny &>/dev/null; then
     check "cargo deny" cargo deny check
-else
-    echo -e "${YELLOW}⚠ cargo-deny non installé — saute (cargo install --locked cargo-deny)${NC}"
 fi
-
-# --- Autres outils locaux ---
 
 if command -v cargo-outdated &>/dev/null; then
     check "cargo outdated" cargo outdated
-else
-    echo -e "${YELLOW}⚠ cargo-outdated non installé — saute (cargo install cargo-outdated)${NC}"
 fi
 
 if command -v cargo-audit &>/dev/null; then
     check "cargo audit" cargo audit
-else
-    echo -e "${YELLOW}⚠ cargo-audit non installé — saute (cargo install cargo-audit)${NC}"
 fi
 
 if command -v cargo-udeps &>/dev/null; then
     check "cargo udeps" cargo +nightly udeps --all-targets
-else
-    echo -e "${YELLOW}⚠ cargo-udeps non installé — saute (cargo install cargo-udeps)${NC}"
 fi
 
 # --- Résumé ---

@@ -41,6 +41,7 @@ fn init_logger(
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::fmt()
+        .with_ansi(false)
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
@@ -131,9 +132,31 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
                 ])
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .creation_flags(0x08000000)
                 .status();
-            // Give a brief moment for the OS to release the hotkey and file handles
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        #[cfg(not(windows))]
+        {
+            if let Ok(output) = std::process::Command::new("pidof")
+                .arg("thoth")
+                .output()
+            {
+                let current_pid = std::process::id();
+                if let Ok(pids_str) = String::from_utf8(output.stdout) {
+                    for pid_str in pids_str.split_whitespace() {
+                        if let Ok(pid) = pid_str.parse::<u32>() {
+                            if pid != current_pid {
+                                let _ = std::process::Command::new("kill")
+                                    .arg(format!("{}", pid))
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .status();
+                            }
+                        }
+                    }
+                }
+            }
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
@@ -229,6 +252,8 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     let config_path = Config::path();
     let tray_enabled = enabled.clone();
     let _tray = std::thread::spawn(move || {
+        #[cfg(target_os = "linux")]
+        silence_stderr();
         if let Err(e) = thoth::tray::start(shutdown_tx, tray_enabled, log_file, config_path) {
             tracing::error!("tray error: {e}");
         }
@@ -454,6 +479,16 @@ fn install_dev_cert(exe_path: &std::path::Path) -> anyhow::Result<CertStoreGuard
 struct CertStoreGuard {
     store: HCERTSTORE,
     cert_context: *mut CERT_CONTEXT,
+}
+
+#[cfg(target_os = "linux")]
+fn silence_stderr() {
+    use std::os::fd::AsRawFd;
+    if let Ok(devnull) = std::fs::File::open("/dev/null") {
+        unsafe {
+            libc::dup2(devnull.as_raw_fd(), libc::STDERR_FILENO);
+        }
+    }
 }
 
 #[cfg(windows)]

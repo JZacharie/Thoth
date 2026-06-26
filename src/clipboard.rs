@@ -19,9 +19,17 @@ impl ClipboardManager {
 
     pub fn copy_selected_text(&mut self) -> Result<String> {
         self.previous = self.inner.get_text().ok();
-        platform::simulate_copy()?;
-        std::thread::sleep(Duration::from_millis(100));
-        let text = self.inner.get_text()?;
+        let mut attempts = 0;
+        let text = loop {
+            platform::simulate_copy()?;
+            std::thread::sleep(Duration::from_millis(150));
+            let text = self.inner.get_text()?;
+            if !text.is_empty() || attempts >= 3 {
+                break text;
+            }
+            attempts += 1;
+            std::thread::sleep(Duration::from_millis(100 * attempts));
+        };
         Ok(text)
     }
 
@@ -122,22 +130,85 @@ mod platform {
     }
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+#[cfg(target_os = "linux")]
 mod platform {
     use anyhow::Result;
+    use rdev::{EventType, Key, simulate};
+    use std::time::Duration;
+
+    fn try_ydotool_simulate(key: &str) -> Result<bool> {
+        use std::process::Command;
+        let key_code = match key {
+            "c" => "46",
+            "v" => "47",
+            "a" => "30",
+            _ => return Ok(false),
+        };
+        let output = Command::new("ydotool")
+            .args(["key", "29:1", &format!("{key_code}:1"), &format!("{key_code}:0"), "29:0"])
+            .output();
+        match output {
+            Ok(status) if status.status.success() => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    fn try_xdotool_simulate(key: &str) -> Result<bool> {
+        use std::process::Command;
+        let combo = match key {
+            "c" => "ctrl+c",
+            "v" => "ctrl+v",
+            "a" => "ctrl+a",
+            _ => return Ok(false),
+        };
+        let output = Command::new("xdotool")
+            .args(["key", "--clearmodifiers", combo])
+            .output();
+        match output {
+            Ok(status) if status.status.success() => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    fn press(key: Key) -> Result<()> {
+        simulate(&EventType::KeyPress(key))?;
+        std::thread::sleep(Duration::from_millis(15));
+        simulate(&EventType::KeyRelease(key))?;
+        Ok(())
+    }
+
+    fn press_with_modifier(key: Key) -> Result<()> {
+        let key_name = match key {
+            Key::KeyC => "c",
+            Key::KeyV => "v",
+            Key::KeyA => "a",
+            _ => return Ok(()),
+        };
+
+        if try_ydotool_simulate(key_name).unwrap_or(false) {
+            return Ok(());
+        }
+        if try_xdotool_simulate(key_name).unwrap_or(false) {
+            return Ok(());
+        }
+
+        std::thread::sleep(Duration::from_millis(200));
+        simulate(&EventType::KeyPress(Key::ControlLeft))?;
+        std::thread::sleep(Duration::from_millis(20));
+        press(key)?;
+        simulate(&EventType::KeyRelease(Key::ControlLeft))?;
+        Ok(())
+    }
 
     pub fn simulate_copy() -> Result<()> {
-        tracing::warn!("keyboard simulation not supported on Linux");
-        Ok(())
+        press_with_modifier(Key::KeyC)
     }
 
     pub fn simulate_paste() -> Result<()> {
-        tracing::warn!("keyboard simulation not supported on Linux");
-        Ok(())
+        press_with_modifier(Key::KeyV)
     }
 
     pub fn simulate_select_all() -> Result<()> {
-        tracing::warn!("keyboard simulation not supported on Linux");
-        Ok(())
+        press_with_modifier(Key::KeyA)
     }
 }
