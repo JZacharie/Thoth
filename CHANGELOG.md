@@ -1,9 +1,12 @@
 # Changelog
 
-## [1.3.0] - 2026-06-26
+## [1.3.1] - 2026-06-26
 
 ### Added
 - **Linux native support** — native Linux support for global hotkeys, notifications, and tray integration
+
+### Fixed
+- **Linux compilation** — fixed missing system library `glib-2.0` on Linux builds by adding `pkg-config`, `libglib2.0-dev`, `libgtk-3-dev` and `libayatana-appindicator3-dev` to the workflow dependencies.
 
 ## [1.2.1] - 2026-06-25
 
