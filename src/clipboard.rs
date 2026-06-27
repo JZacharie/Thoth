@@ -145,7 +145,13 @@ mod platform {
             _ => return Ok(false),
         };
         let output = Command::new("ydotool")
-            .args(["key", "29:1", &format!("{key_code}:1"), &format!("{key_code}:0"), "29:0"])
+            .args([
+                "key",
+                "29:1",
+                &format!("{key_code}:1"),
+                &format!("{key_code}:0"),
+                "29:0",
+            ])
             .output();
         match output {
             Ok(status) if status.status.success() => Ok(true),

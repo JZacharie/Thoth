@@ -54,8 +54,8 @@
 
 #### Cross-Platform
 - **Windows** — full support (RegisterHotKey, DPAPI, tray icon, Authenticode, MSI installer)
-- **macOS** — full support (rdev global hotkeys, Keychain, LaunchAgent, `.app` bundle)
-- **Linux** — full support on X11 (rdev global hotkeys, Secret Service keyring, `.desktop` autostart, tray icon via AppIndicator)
+- **macOS** — partial support (rdev global hotkeys, Keychain, LaunchAgent, `.app` bundle) ⚠️ *not yet stable — testing in progress*
+- **Linux** — partial support on X11 (rdev global hotkeys, Secret Service keyring, `.desktop` autostart, tray icon via AppIndicator) ⚠️ *not yet stable — testing in progress*
 
 ### Hotkey Reference
 
@@ -375,8 +375,8 @@ MIT — see [LICENSE](LICENSE).
 
 #### Multiplateforme
 - **Windows** — support complet (RegisterHotKey, DPAPI, icône de barre d'état, Authenticode, MSI)
-- **macOS** — support complet (raccourcis globaux rdev, Keychain, LaunchAgent, bundle `.app`)
-- **Linux** — support complet sur X11 (raccourcis globaux rdev, Secret Service keyring, démarrage auto `.desktop`, icône tray via AppIndicator)
+- **macOS** — support partiel (raccourcis globaux rdev, Keychain, LaunchAgent, bundle `.app`) ⚠️ *pas encore stable — tests en cours*
+- **Linux** — support partiel sur X11 (raccourcis globaux rdev, Secret Service keyring, démarrage auto `.desktop`, icône tray via AppIndicator) ⚠️ *pas encore stable — tests en cours*
 
 ### Raccourcis
 

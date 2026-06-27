@@ -138,21 +138,18 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
         }
         #[cfg(not(windows))]
         {
-            if let Ok(output) = std::process::Command::new("pidof")
-                .arg("thoth")
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("pidof").arg("thoth").output() {
                 let current_pid = std::process::id();
                 if let Ok(pids_str) = String::from_utf8(output.stdout) {
                     for pid_str in pids_str.split_whitespace() {
-                        if let Ok(pid) = pid_str.parse::<u32>() {
-                            if pid != current_pid {
-                                let _ = std::process::Command::new("kill")
-                                    .arg(format!("{}", pid))
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .status();
-                            }
+                        if let Ok(pid) = pid_str.parse::<u32>()
+                            && pid != current_pid
+                        {
+                            let _ = std::process::Command::new("kill")
+                                .arg(format!("{}", pid))
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null())
+                                .status();
                         }
                     }
                 }
@@ -163,7 +160,36 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
 
     let config = Config::load().unwrap_or_default();
 
+    let log_file_for_panic = log_file.clone();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "Unknown panic payload"
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let msg = format!("Panic occurred at {}: {}", location, payload);
+        tracing::error!("{}", msg);
+
+        show_crash_dialog(&msg, &log_file_for_panic);
+    }));
+
     if is_gui {
+        tracing::info!(
+            "starting gui mode: {:?}",
+            if args.iter().any(|arg| arg == "--config") {
+                "config"
+            } else if args.iter().any(|arg| arg == "--stats") {
+                "stats"
+            } else {
+                "prompt"
+            }
+        );
         let mode = if args.iter().any(|arg| arg == "--config") {
             thoth::gui::GuiMode::Config
         } else if args.iter().any(|arg| arg == "--stats") {
@@ -172,7 +198,11 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
             thoth::gui::GuiMode::Prompt
         };
 
-        let mut options = eframe::NativeOptions::default();
+        let mut options = eframe::NativeOptions {
+            #[cfg(windows)]
+            renderer: eframe::Renderer::Wgpu,
+            ..Default::default()
+        };
 
         // ── Window icon ──────────────────────────────────────────────────────
         // Embedded at compile time — no runtime file dependency
@@ -214,25 +244,6 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to run eframe: {:?}", e))?;
         return Ok(());
     }
-
-    let log_file_for_panic = log_file.clone();
-    std::panic::set_hook(Box::new(move |info| {
-        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
-            *s
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            s.as_str()
-        } else {
-            "Unknown panic payload"
-        };
-        let location = info
-            .location()
-            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
-            .unwrap_or_else(|| "unknown location".to_string());
-        let msg = format!("Panic occurred at {}: {}", location, payload);
-        tracing::error!("{}", msg);
-
-        show_crash_dialog(&msg, &log_file_for_panic);
-    }));
 
     let mut config = config;
     if config.pylos.secret.is_empty() {

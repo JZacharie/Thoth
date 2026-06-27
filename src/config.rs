@@ -351,7 +351,7 @@ mod tests {
         assert_eq!(cfg.endpoint, "https://pylos-dev.p.zacharie.org");
         assert_eq!(cfg.model, "gemini4:e2b");
         assert_eq!(cfg.fallback_model, Some("gemma4:12b".into()));
-        assert_eq!(cfg.timeout_secs, 30);
+        assert_eq!(cfg.timeout_secs, 120);
         let env_val = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
         assert_eq!(cfg.secret, env_val);
     }
