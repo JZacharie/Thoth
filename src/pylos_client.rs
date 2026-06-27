@@ -87,6 +87,11 @@ impl PylosClient {
         while config.endpoint.ends_with('/') {
             config.endpoint.pop();
         }
+        if config.endpoint.ends_with("/v1/chat/completions") {
+            config.endpoint.truncate(config.endpoint.len() - 20);
+        } else if config.endpoint.ends_with("/chat/completions") {
+            config.endpoint.truncate(config.endpoint.len() - 17);
+        }
         if config.endpoint.ends_with("/v1") {
             config.endpoint.truncate(config.endpoint.len() - 3);
         }
