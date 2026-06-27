@@ -76,6 +76,93 @@ pub fn is_sensitive(text: &str) -> bool {
     contains_sensitive_data(text)
 }
 
+pub fn anonymize(text: &str) -> (String, std::collections::HashMap<String, String>) {
+    let mut placeholders = std::collections::HashMap::new();
+    let mut modified_text = text.to_string();
+
+    let patterns = [
+        regex::Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap(),
+        regex::Regex::new(r"pk-[a-zA-Z0-9]{20,}").unwrap(),
+        regex::Regex::new(r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+").unwrap(),
+        regex::Regex::new(r"-----BEGIN.*PRIVATE KEY-----").unwrap(),
+        regex::Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
+        regex::Regex::new(r"(?i)AKIA[A-Z0-9]{16}").unwrap(),
+        regex::Regex::new(r"gh[pousr]_[a-zA-Z0-9]{36,255}").unwrap(),
+        regex::Regex::new(r"xox[bp]-[a-zA-Z0-9-]{10,}").unwrap(),
+        regex::Regex::new(r"(?i)slack").unwrap(),
+        regex::Regex::new(r#"(?i)mongodb://[^\s&'"<>]+"#).unwrap(),
+        regex::Regex::new(r#"(?i)postgres(ql)?://[^\s&'"<>]+"#).unwrap(),
+        regex::Regex::new(r#"(?i)mysql://[^\s&'"<>]+"#).unwrap(),
+    ];
+
+    let mut counter = 0;
+    for re in &patterns {
+        while let Some(m) = re.find(&modified_text) {
+            let matched_str = m.as_str().to_string();
+            let placeholder = format!("__THOTH_PII_{}__", counter);
+            modified_text = modified_text.replace(&matched_str, &placeholder);
+            placeholders.insert(placeholder, matched_str);
+            counter += 1;
+        }
+    }
+
+    (modified_text, placeholders)
+}
+
+pub fn deanonymize(text: &str, placeholders: &std::collections::HashMap<String, String>) -> String {
+    let mut restored = text.to_string();
+    for (placeholder, original) in placeholders {
+        let index_str = placeholder
+            .trim_start_matches("__THOTH_PII_")
+            .trim_end_matches("__");
+        if let Ok(index) = index_str.parse::<u32>() {
+            let pattern = format!(
+                r"(?i)(?:__\s*|\[\s*|\{{\s*)?THOTH\s*_?\s*PII\s*_?\s*{}\s*(?:\s*\]|\s*\}}|\s*__)?",
+                index
+            );
+            if let Ok(re) = regex::Regex::new(&pattern) {
+                restored = re.replace_all(&restored, original).to_string();
+                continue;
+            }
+        }
+        let escaped = regex::escape(placeholder);
+        if let Ok(re) = regex::RegexBuilder::new(&escaped)
+            .case_insensitive(true)
+            .build()
+        {
+            restored = re.replace_all(&restored, original).to_string();
+        }
+    }
+    restored
+}
+
+pub fn clean_response(text: &str) -> String {
+    let mut cleaned = text.trim().to_string();
+
+    let prefixes = [
+        regex::Regex::new(r"(?i)^voici le texte corrigé et traduit\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^voici la traduction\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^voici le texte traduit\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^here is the translation\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^here is the corrected and translated text\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^here is the corrected text\s*:\s*\n*").unwrap(),
+        regex::Regex::new(r"(?i)^voici le texte corrigé\s*:\s*\n*").unwrap(),
+    ];
+
+    for re in &prefixes {
+        cleaned = re.replace(&cleaned, "").to_string();
+    }
+
+    let mut cleaned = cleaned.trim().to_string();
+    if let Some(stripped) = cleaned.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        cleaned = stripped.trim().to_string();
+    } else if let Some(stripped) = cleaned.strip_prefix('«').and_then(|s| s.strip_suffix('»')) {
+        cleaned = stripped.trim().to_string();
+    }
+
+    cleaned
+}
+
 pub struct PylosClient {
     client: Client,
     config: PylosConfig,
@@ -143,6 +230,7 @@ impl PylosClient {
         model: &str,
         target_lang: &str,
     ) -> Result<String> {
+        let (anon_text, mapping) = anonymize(text);
         let request = ChatRequest {
             model: model.into(),
             messages: vec![
@@ -152,7 +240,7 @@ impl PylosClient {
                 },
                 Message {
                     role: "user".into(),
-                    content: text.into(),
+                    content: anon_text,
                 },
             ],
         };
@@ -175,7 +263,9 @@ impl PylosClient {
             .map(|c| c.message.content)
             .unwrap_or_default();
 
-        Ok(content)
+        let cleaned = clean_response(&content);
+        let restored = deanonymize(&cleaned, &mapping);
+        Ok(restored)
     }
 
     pub fn model_name(&self) -> String {
@@ -208,6 +298,7 @@ impl PylosClient {
     }
 
     pub async fn execute_instruction(&self, text: &str) -> Result<String> {
+        let (anon_text, mapping) = anonymize(text);
         let system_prompt = self.build_instruction_prompt();
         let request = ChatRequest {
             model: self.config.model.clone(),
@@ -218,7 +309,7 @@ impl PylosClient {
                 },
                 Message {
                     role: "user".into(),
-                    content: text.into(),
+                    content: anon_text.clone(),
                 },
             ],
         };
@@ -248,7 +339,7 @@ impl PylosClient {
                                 },
                                 Message {
                                     role: "user".into(),
-                                    content: text.into(),
+                                    content: anon_text.clone(),
                                 },
                             ],
                         };
@@ -274,7 +365,9 @@ impl PylosClient {
             .map(|c| c.message.content)
             .unwrap_or_default();
 
-        Ok(content)
+        let cleaned = clean_response(&content);
+        let restored = deanonymize(&cleaned, &mapping);
+        Ok(restored)
     }
 
     pub async fn translate_to(&self, text: &str, target_lang: &str) -> Result<String> {

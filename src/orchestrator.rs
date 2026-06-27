@@ -222,14 +222,13 @@ impl Orchestrator {
             }
 
             if is_sensitive(&original_text) {
-                tracing::warn!("sensitive data detected, blocking request");
-                if let Err(e) = self.clipboard.restore() {
-                    tracing::error!("clipboard restore failed: {e}");
-                }
-                self.metrics.record_error();
-                self.metrics.save();
-                notification::notify_warning("Texte sensible détecté — envoi bloqué");
-                continue;
+                tracing::info!(
+                    "PII Validation: Sensitive pattern detected. Text will be anonymized before sending to Groq/Pylos."
+                );
+            } else {
+                tracing::info!(
+                    "PII Validation: Text is safe (no sensitive patterns matched). Proceeding with request."
+                );
             }
 
             let translated = match action {

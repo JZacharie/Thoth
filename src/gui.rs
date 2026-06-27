@@ -183,6 +183,17 @@ impl ThothGuiApp {
             self.config.behavior.target_language.clone(),
         );
         let original = self.original_text.clone();
+
+        if crate::pylos_client::is_sensitive(&original) {
+            tracing::info!(
+                "PII Validation (GUI): Sensitive pattern detected. Text will be anonymized before sending to Groq/Pylos."
+            );
+        } else {
+            tracing::info!(
+                "PII Validation (GUI): Text is safe (no sensitive patterns matched). Proceeding with request."
+            );
+        }
+
         #[cfg(windows)]
         let active_window_addr = self.active_window as usize;
         let restore_clipboard = self.config.behavior.restore_clipboard;

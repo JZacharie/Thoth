@@ -371,3 +371,34 @@ fn create_dummy_png() -> Vec<u8> {
     }
     png_bytes
 }
+
+#[test]
+fn test_anonymization_and_deanonymization() {
+    let original = "Hello Jojo, here is my key: sk-abcdefghijklmnopqrstuvwxyz1234. Let's charge card 4532 7182 9381 0293.";
+    let (anon, mapping) = thoth::pylos_client::anonymize(original);
+
+    // Verify it replaced the key and card with placeholders
+    assert!(anon.contains("__THOTH_PII_"));
+    assert!(!anon.contains("sk-abcdefghijklmnopqrstuvwxyz1234"));
+    assert!(!anon.contains("4532 7182 9381 0293"));
+
+    // Simulate LLM translation/response stripping the double underscores
+    let simulated_llm_response =
+        "Bonjour Jojo, voici ma clé : THOTH_PII_0. Débitons la carte THOTH_PII_1.";
+
+    let restored = thoth::pylos_client::deanonymize(simulated_llm_response, &mapping);
+    assert!(restored.contains("sk-abcdefghijklmnopqrstuvwxyz1234"));
+    assert!(restored.contains("4532 7182 9381 0293"));
+    assert!(!restored.contains("THOTH_PII_"));
+}
+
+#[test]
+fn test_clean_response() {
+    let raw = "Voici le texte corrigé et traduit : \n\"Hello World\"";
+    let cleaned = thoth::pylos_client::clean_response(raw);
+    assert_eq!(cleaned, "Hello World");
+
+    let raw_french = "Voici la traduction:\n«Bonjour tout le monde»";
+    let cleaned_french = thoth::pylos_client::clean_response(raw_french);
+    assert_eq!(cleaned_french, "Bonjour tout le monde");
+}
