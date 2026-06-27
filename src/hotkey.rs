@@ -471,10 +471,10 @@ mod platform_macos {
                                     }
                                 }
                             }
-                            if let Some(action) = action {
-                                if tx_clone.try_send(action).is_err() {
-                                    tracing::warn!("hotkey channel full, dropping event");
-                                }
+                            if let Some(action) = action
+                                && tx_clone.try_send(action).is_err()
+                            {
+                                tracing::warn!("hotkey channel full, dropping event");
                             }
                         }
                     }
@@ -614,10 +614,10 @@ mod platform_linux {
                                     }
                                 }
                             }
-                            if let Some(action) = action {
-                                if tx_clone.try_send(action).is_err() {
-                                    tracing::warn!("hotkey channel full, dropping event");
-                                }
+                            if let Some(action) = action
+                                && tx_clone.try_send(action).is_err()
+                            {
+                                tracing::warn!("hotkey channel full, dropping event");
                             }
                         }
                     }

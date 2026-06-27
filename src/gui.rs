@@ -531,6 +531,14 @@ impl ThothGuiApp {
                                     .suffix(" s"),
                             );
                         });
+                        cfg_field(ui, "Clé privée", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.secret)
+                                    .password(true)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
 
                         ui.add_space(8.0);
 
