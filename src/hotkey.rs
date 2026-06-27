@@ -1,6 +1,6 @@
 use anyhow::Result;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -11,13 +11,14 @@ pub enum Modifier {
     Shift,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HotkeyAction {
     TranslateDefault,
     TranslateEnglish,
     ExecuteInstruction,
     Reformulate,
     ScreenshotAnalysis,
+    Custom(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,30 +87,118 @@ impl HotkeyPattern {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HotkeyConfig {
+    pub translate_system: HotkeyPattern,
+    pub translate_english: HotkeyPattern,
+    pub execute_instruction: HotkeyPattern,
+    pub custom_instructions: Vec<(HotkeyPattern, String)>,
+}
+
+impl HotkeyConfig {
+    pub fn from_config(config: &crate::config::Config) -> Self {
+        let translate_system = HotkeyPattern::parse(&config.behavior.hotkey_translate_system)
+            .unwrap_or_else(|_| HotkeyPattern::parse("Ctrl+Shift+Win+,").unwrap());
+        let translate_english = HotkeyPattern::parse(&config.behavior.hotkey_translate_english)
+            .unwrap_or_else(|_| HotkeyPattern::parse("Ctrl+Shift+Win+;").unwrap());
+        let execute_instruction = HotkeyPattern::parse(&config.behavior.hotkey)
+            .unwrap_or_else(|_| HotkeyPattern::parse("Ctrl+Shift+Win+:").unwrap());
+
+        let mut custom_instructions = Vec::new();
+        for custom in &config.behavior.custom_instructions {
+            if let Ok(pat) = HotkeyPattern::parse(&custom.hotkey) {
+                custom_instructions.push((pat, custom.instruction.clone()));
+            }
+        }
+
+        Self {
+            translate_system,
+            translate_english,
+            execute_instruction,
+            custom_instructions,
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn match_pattern(pressed: &std::collections::HashSet<String>, pattern: &HotkeyPattern) -> bool {
+    let mut expected_mods = std::collections::HashSet::new();
+    for m in &pattern.modifiers {
+        match m {
+            Modifier::Ctrl => {
+                expected_mods.insert("ctrl".to_string());
+            }
+            Modifier::Shift => {
+                expected_mods.insert("shift".to_string());
+            }
+            Modifier::Alt => {
+                expected_mods.insert("alt".to_string());
+            }
+            Modifier::Win => {
+                expected_mods.insert("win".to_string());
+            }
+        }
+    }
+
+    let mut pressed_mods = std::collections::HashSet::new();
+    for k in pressed {
+        match k.as_str() {
+            "ctrl" => {
+                pressed_mods.insert("ctrl".to_string());
+            }
+            "shift" => {
+                pressed_mods.insert("shift".to_string());
+            }
+            "alt" => {
+                pressed_mods.insert("alt".to_string());
+            }
+            "win" | "cmd" => {
+                pressed_mods.insert("win".to_string());
+            }
+            _ => {}
+        }
+    }
+
+    if expected_mods != pressed_mods {
+        return false;
+    }
+
+    let key_str = match &pattern.key {
+        HotkeyKey::Letter(ch) => ch.to_string(),
+        HotkeyKey::Number(n) => n.to_string(),
+        HotkeyKey::Space => "space".to_string(),
+        HotkeyKey::Comma => ",".to_string(),
+        HotkeyKey::Semicolon => ";".to_string(),
+        HotkeyKey::Colon => ":".to_string(),
+        HotkeyKey::F(n) => format!("f{}", n),
+    };
+
+    pressed.contains(&key_str)
+}
+
 pub fn start(
     tx: mpsc::Sender<HotkeyAction>,
-    pattern: Arc<Mutex<HotkeyPattern>>,
+    config: &crate::config::Config,
     enabled: Arc<AtomicBool>,
 ) -> Result<()> {
+    let hotkey_config = HotkeyConfig::from_config(config);
     #[cfg(windows)]
     {
-        platform_win::start(tx, pattern, enabled)
+        platform_win::start(tx, hotkey_config, enabled)
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = pattern;
-        platform_macos::start(tx, enabled)
+        platform_macos::start(tx, hotkey_config, enabled)
     }
     #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
-        let _ = (tx, pattern, enabled);
+        let _ = (tx, hotkey_config, enabled);
         tracing::warn!("global hotkeys not supported on this platform");
         Ok(())
     }
     #[cfg(target_os = "linux")]
     {
-        let _ = pattern;
-        platform_linux::start(tx, enabled)
+        platform_linux::start(tx, hotkey_config, enabled)
     }
 }
 
@@ -117,7 +206,7 @@ pub fn start(
 mod platform_win {
     use anyhow::Result;
     use std::sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     };
     use tokio::sync::mpsc;
@@ -125,7 +214,7 @@ mod platform_win {
         DispatchMessageW, GetMessageW, MSG, TranslateMessage, WM_HOTKEY,
     };
 
-    use super::{HotkeyAction, HotkeyKey, HotkeyPattern, Modifier};
+    use super::{HotkeyAction, HotkeyConfig, HotkeyKey, Modifier};
 
     fn get_win32_modifiers(modifiers: &[Modifier]) -> u32 {
         let mut m = 0;
@@ -154,25 +243,24 @@ mod platform_win {
 
     pub fn start(
         tx: mpsc::Sender<HotkeyAction>,
-        pattern: Arc<Mutex<HotkeyPattern>>,
+        hotkey_config: HotkeyConfig,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
-        let pat_default = pattern.lock().unwrap().clone();
-        let hotkeys: [(i32, u32, u32); 5] = [
+        let mut hotkeys = vec![
             (
                 1,
-                get_win32_modifiers(&pat_default.modifiers) | 0x4000,
-                get_win32_vk(&pat_default.key),
+                get_win32_modifiers(&hotkey_config.translate_system.modifiers) | 0x4000,
+                get_win32_vk(&hotkey_config.translate_system.key),
             ),
             (
                 2,
-                get_win32_modifiers(&[Modifier::Ctrl, Modifier::Shift, Modifier::Win]) | 0x4000,
-                get_win32_vk(&HotkeyKey::Comma),
+                get_win32_modifiers(&hotkey_config.translate_english.modifiers) | 0x4000,
+                get_win32_vk(&hotkey_config.translate_english.key),
             ),
             (
                 3,
-                get_win32_modifiers(&[Modifier::Ctrl, Modifier::Shift, Modifier::Win]) | 0x4000,
-                get_win32_vk(&HotkeyKey::Colon),
+                get_win32_modifiers(&hotkey_config.execute_instruction.modifiers) | 0x4000,
+                get_win32_vk(&hotkey_config.execute_instruction.key),
             ),
             (
                 4,
@@ -185,6 +273,16 @@ mod platform_win {
                 get_win32_vk(&HotkeyKey::Letter('p')),
             ),
         ];
+
+        for (i, (pat, _)) in hotkey_config.custom_instructions.iter().enumerate() {
+            hotkeys.push((
+                100 + i as i32,
+                get_win32_modifiers(&pat.modifiers) | 0x4000,
+                get_win32_vk(&pat.key),
+            ));
+        }
+
+        let hotkey_config_clone = hotkey_config.clone();
 
         std::thread::spawn(move || {
             unsafe extern "system" {
@@ -217,6 +315,16 @@ mod platform_win {
                             3 => HotkeyAction::ExecuteInstruction,
                             4 => HotkeyAction::Reformulate,
                             5 => HotkeyAction::ScreenshotAnalysis,
+                            id if id >= 100 => {
+                                let idx = (id - 100) as usize;
+                                if idx < hotkey_config_clone.custom_instructions.len() {
+                                    HotkeyAction::Custom(
+                                        hotkey_config_clone.custom_instructions[idx].1.clone(),
+                                    )
+                                } else {
+                                    continue;
+                                }
+                            }
                             _ => continue,
                         };
                         if tx.try_send(action).is_err() {
@@ -246,17 +354,14 @@ mod platform_macos {
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
 
-    use super::HotkeyAction;
+    use super::{HotkeyAction, HotkeyConfig, HotkeyKey, HotkeyPattern, Modifier, match_pattern};
 
     fn modifier_from_key(key: &Key) -> Option<&'static str> {
         match key {
             Key::ControlLeft | Key::ControlRight => Some("ctrl"),
             Key::Alt | Key::AltGr => Some("alt"),
             Key::ShiftLeft | Key::ShiftRight => Some("shift"),
-            #[cfg(target_os = "macos")]
             Key::MetaLeft | Key::MetaRight => Some("cmd"),
-            #[cfg(not(target_os = "macos"))]
-            Key::MetaLeft | Key::MetaRight | Key::SuperLeft | Key::SuperRight => Some("win"),
             _ => None,
         }
     }
@@ -305,7 +410,11 @@ mod platform_macos {
         }
     }
 
-    pub fn start(tx: mpsc::Sender<HotkeyAction>, enabled: Arc<AtomicBool>) -> Result<()> {
+    pub fn start(
+        tx: mpsc::Sender<HotkeyAction>,
+        hotkey_config: HotkeyConfig,
+        enabled: Arc<AtomicBool>,
+    ) -> Result<()> {
         let pressed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
         let tx_clone = tx.clone();
         let enabled_clone = enabled.clone();
@@ -315,7 +424,6 @@ mod platform_macos {
                 if !enabled_clone.load(Ordering::Relaxed) {
                     return;
                 }
-
                 match event.event_type {
                     EventType::KeyPress(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
@@ -332,25 +440,40 @@ mod platform_macos {
                         if let Some(key_name) = key_to_str(&key) {
                             let mut p = pressed.lock().unwrap();
                             p.remove(key_name);
-
-                            // Check for Ctrl+Shift+Cmd/Win+<key> combinations
-                            let has_ctrl = p.contains("ctrl");
-                            let has_shift = p.contains("shift");
-                            let has_cmd = p.contains("cmd") || p.contains("win");
-
-                            if has_ctrl && has_shift && has_cmd {
-                                let action = match key_name {
-                                    "n" => Some(HotkeyAction::TranslateDefault),
-                                    "," => Some(HotkeyAction::TranslateEnglish),
-                                    ";" => Some(HotkeyAction::ExecuteInstruction),
-                                    "r" => Some(HotkeyAction::Reformulate),
-                                    "p" => Some(HotkeyAction::ScreenshotAnalysis),
-                                    _ => None,
-                                };
-                                if let Some(action) = action {
-                                    if tx_clone.try_send(action).is_err() {
-                                        tracing::warn!("hotkey channel full, dropping event");
+                            let mut action = None;
+                            if match_pattern(&p, &hotkey_config.translate_system) {
+                                action = Some(HotkeyAction::TranslateDefault);
+                            } else if match_pattern(&p, &hotkey_config.translate_english) {
+                                action = Some(HotkeyAction::TranslateEnglish);
+                            } else if match_pattern(&p, &hotkey_config.execute_instruction) {
+                                action = Some(HotkeyAction::ExecuteInstruction);
+                            } else if match_pattern(
+                                &p,
+                                &HotkeyPattern {
+                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                                    key: HotkeyKey::Letter('r'),
+                                },
+                            ) {
+                                action = Some(HotkeyAction::Reformulate);
+                            } else if match_pattern(
+                                &p,
+                                &HotkeyPattern {
+                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                                    key: HotkeyKey::Letter('p'),
+                                },
+                            ) {
+                                action = Some(HotkeyAction::ScreenshotAnalysis);
+                            } else {
+                                for (pat, inst) in &hotkey_config.custom_instructions {
+                                    if match_pattern(&p, pat) {
+                                        action = Some(HotkeyAction::Custom(inst.clone()));
+                                        break;
                                     }
+                                }
+                            }
+                            if let Some(action) = action {
+                                if tx_clone.try_send(action).is_err() {
+                                    tracing::warn!("hotkey channel full, dropping event");
                                 }
                             }
                         }
@@ -361,7 +484,6 @@ mod platform_macos {
                 tracing::error!("rdev listen failed: {e:?}");
             }
         });
-
         Ok(())
     }
 }
@@ -375,7 +497,7 @@ mod platform_linux {
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
 
-    use super::HotkeyAction;
+    use super::{HotkeyAction, HotkeyConfig, HotkeyKey, HotkeyPattern, Modifier, match_pattern};
 
     fn modifier_from_key(key: &Key) -> Option<&'static str> {
         match key {
@@ -431,7 +553,11 @@ mod platform_linux {
         }
     }
 
-    pub fn start(tx: mpsc::Sender<HotkeyAction>, enabled: Arc<AtomicBool>) -> Result<()> {
+    pub fn start(
+        tx: mpsc::Sender<HotkeyAction>,
+        hotkey_config: HotkeyConfig,
+        enabled: Arc<AtomicBool>,
+    ) -> Result<()> {
         let pressed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
         let tx_clone = tx.clone();
         let enabled_clone = enabled.clone();
@@ -441,7 +567,6 @@ mod platform_linux {
                 if !enabled_clone.load(Ordering::Relaxed) {
                     return;
                 }
-
                 match event.event_type {
                     EventType::KeyPress(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
@@ -458,24 +583,39 @@ mod platform_linux {
                         if let Some(key_name) = key_to_str(&key) {
                             let mut p = pressed.lock().unwrap();
                             p.remove(key_name);
-
-                            // Check for Ctrl+Shift+Win/Super+<key> combinations
-                            let has_ctrl = p.contains("ctrl");
-                            let has_shift = p.contains("shift");
-                            let has_win = p.contains("win");
-
-                            if has_ctrl && has_shift && has_win {
-                                let action = match key_name {
-                                    "n" => Some(HotkeyAction::TranslateDefault),
-                                    "," => Some(HotkeyAction::TranslateEnglish),
-                                    ";" => Some(HotkeyAction::ExecuteInstruction),
-                                    "r" => Some(HotkeyAction::Reformulate),
-                                    "p" => Some(HotkeyAction::ScreenshotAnalysis),
-                                    _ => None,
-                                };
-                                if let Some(action) = action
-                                    && tx_clone.try_send(action).is_err()
-                                {
+                            let mut action = None;
+                            if match_pattern(&p, &hotkey_config.translate_system) {
+                                action = Some(HotkeyAction::TranslateDefault);
+                            } else if match_pattern(&p, &hotkey_config.translate_english) {
+                                action = Some(HotkeyAction::TranslateEnglish);
+                            } else if match_pattern(&p, &hotkey_config.execute_instruction) {
+                                action = Some(HotkeyAction::ExecuteInstruction);
+                            } else if match_pattern(
+                                &p,
+                                &HotkeyPattern {
+                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                                    key: HotkeyKey::Letter('r'),
+                                },
+                            ) {
+                                action = Some(HotkeyAction::Reformulate);
+                            } else if match_pattern(
+                                &p,
+                                &HotkeyPattern {
+                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                                    key: HotkeyKey::Letter('p'),
+                                },
+                            ) {
+                                action = Some(HotkeyAction::ScreenshotAnalysis);
+                            } else {
+                                for (pat, inst) in &hotkey_config.custom_instructions {
+                                    if match_pattern(&p, pat) {
+                                        action = Some(HotkeyAction::Custom(inst.clone()));
+                                        break;
+                                    }
+                                }
+                            }
+                            if let Some(action) = action {
+                                if tx_clone.try_send(action).is_err() {
                                     tracing::warn!("hotkey channel full, dropping event");
                                 }
                             }
@@ -487,7 +627,6 @@ mod platform_linux {
                 tracing::error!("rdev listen failed: {e:?}");
             }
         });
-
         Ok(())
     }
 }

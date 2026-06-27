@@ -37,6 +37,20 @@ impl Default for PylosConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CustomInstructionHotkey {
+    pub hotkey: String,
+    pub instruction: String,
+}
+
+fn default_hotkey_translate_system() -> String {
+    "Ctrl+Shift+Win+,".to_string()
+}
+
+fn default_hotkey_translate_english() -> String {
+    "Ctrl+Shift+Win+;".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehaviorConfig {
     pub target_language: String,
@@ -44,6 +58,12 @@ pub struct BehaviorConfig {
     pub show_notifications: bool,
     pub debounce_ms: u64,
     pub hotkey: String,
+    #[serde(default = "default_hotkey_translate_system")]
+    pub hotkey_translate_system: String,
+    #[serde(default = "default_hotkey_translate_english")]
+    pub hotkey_translate_english: String,
+    #[serde(default)]
+    pub custom_instructions: Vec<CustomInstructionHotkey>,
     #[serde(default)]
     pub log_path: Option<String>,
 }
@@ -55,7 +75,10 @@ impl Default for BehaviorConfig {
             restore_clipboard: true,
             show_notifications: true,
             debounce_ms: 500,
-            hotkey: "Ctrl+Shift+Win+N".into(),
+            hotkey: "Ctrl+Shift+Win+:".into(),
+            hotkey_translate_system: default_hotkey_translate_system(),
+            hotkey_translate_english: default_hotkey_translate_english(),
+            custom_instructions: Vec::new(),
             log_path: None,
         }
     }
@@ -364,7 +387,7 @@ mod tests {
         assert!(cfg.show_notifications);
         assert!(cfg.restore_clipboard);
         assert_eq!(cfg.debounce_ms, 500);
-        assert_eq!(cfg.hotkey, "Ctrl+Shift+Win+N");
+        assert_eq!(cfg.hotkey, "Ctrl+Shift+Win+:");
         assert_eq!(cfg.log_path, None);
     }
 

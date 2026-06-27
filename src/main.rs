@@ -1,10 +1,9 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, atomic::AtomicBool};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use thoth::config::Config;
-use thoth::hotkey::HotkeyPattern;
 use thoth::orchestrator::Orchestrator;
 use tracing_subscriber::EnvFilter;
 
@@ -249,10 +248,6 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     }
 
     let enabled = Arc::new(AtomicBool::new(true));
-    let hotkey_pattern = Arc::new(Mutex::new(
-        HotkeyPattern::parse(&config.behavior.hotkey)
-            .unwrap_or_else(|_| HotkeyPattern::default_win_n()),
-    ));
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
@@ -267,8 +262,8 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     });
 
     let (hotkey_tx, hotkey_rx) = tokio::sync::mpsc::channel::<thoth::hotkey::HotkeyAction>(16);
-    thoth::hotkey::start(hotkey_tx, hotkey_pattern, enabled)?;
-    tracing::info!("hotkey listener started ({})", config.behavior.hotkey);
+    thoth::hotkey::start(hotkey_tx, &config, enabled)?;
+    tracing::info!("hotkey listener started");
 
     let mut orchestrator = Orchestrator::new(hotkey_rx, config.clone())?;
 

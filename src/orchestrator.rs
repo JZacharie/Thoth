@@ -236,6 +236,32 @@ impl Orchestrator {
                 HotkeyAction::ExecuteInstruction | HotkeyAction::ScreenshotAnalysis => {
                     unreachable!()
                 }
+                HotkeyAction::Custom(ref instruction) => {
+                    tracing::info!(
+                        "orchestrator: executing custom instruction: '{}' (len: {})",
+                        instruction,
+                        original_text.len()
+                    );
+                    let prompt = format!(
+                        "Instruction : {}\n\nTexte à traiter :\n{}",
+                        instruction, original_text
+                    );
+                    match self.pylos.execute_instruction(&prompt).await {
+                        Ok(t) => t,
+                        Err(e) => {
+                            tracing::error!("pylos request failed: {e}");
+                            self.metrics.record_error();
+                            self.metrics.save();
+                            notification::notify_error(
+                                "Pylos introuvable — vérifiez qu'il est en cours d'exécution",
+                            );
+                            if let Err(e) = self.clipboard.restore() {
+                                tracing::error!("clipboard restore failed: {e}");
+                            }
+                            continue;
+                        }
+                    }
+                }
                 HotkeyAction::Reformulate => {
                     tracing::info!(
                         "orchestrator: reformulating text (len: {}, hash: {:x})",

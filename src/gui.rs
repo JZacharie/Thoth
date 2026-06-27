@@ -76,6 +76,9 @@ pub struct ThothGuiApp {
     show_notifications: bool,
     debounce_ms: u64,
     hotkey: String,
+    hotkey_translate_system: String,
+    hotkey_translate_english: String,
+    custom_instructions: Vec<crate::config::CustomInstructionHotkey>,
     #[allow(dead_code)]
     log_path: String,
 
@@ -128,6 +131,9 @@ impl ThothGuiApp {
             show_notifications: config.behavior.show_notifications,
             debounce_ms: config.behavior.debounce_ms,
             hotkey: config.behavior.hotkey.clone(),
+            hotkey_translate_system: config.behavior.hotkey_translate_system.clone(),
+            hotkey_translate_english: config.behavior.hotkey_translate_english.clone(),
+            custom_instructions: config.behavior.custom_instructions.clone(),
             log_path: config.behavior.log_path.clone().unwrap_or_default(),
             mqtt_broker: config.mqtt.broker.clone(),
             mqtt_username: config.mqtt.username.clone(),
@@ -452,187 +458,159 @@ impl ThothGuiApp {
                     .inner_margin(egui::Margin::same(PAD)),
             )
             .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    // Each field: label above, full-width input below
-                    cfg_field(ui, "Endpoint", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.endpoint)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Model", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.model)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Fallback Model", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.fallback_model)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Target Language", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.target_language)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Hotkey", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.hotkey)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Timeout (s)", |ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut self.timeout_secs)
-                                .range(1..=300)
-                                .suffix(" s"),
-                        );
-                    });
+                ui.label(
+                    egui::RichText::new("Configuration")
+                        .color(TEXT_WHITE)
+                        .strong()
+                        .size(16.0),
+                );
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(12.0);
 
-                    ui.add_space(4.0);
+                // Reserve 80.0 pixels for status message, separator, and bottom buttons
+                let available_height = ui.available_height();
+                let scroll_height = (available_height - 80.0).max(100.0);
 
-                    // Checkboxes
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.restore_clipboard, "");
+                egui::ScrollArea::vertical()
+                    .max_height(scroll_height)
+                    .show(ui, |ui| {
+                        cfg_field(ui, "Endpoint", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.endpoint)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Model", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.model)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Fallback Model", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.fallback_model)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Target Language", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.target_language)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Hotkey (Menu)", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.hotkey)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Hotkey (Traduction Système)", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.hotkey_translate_system)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Hotkey (Traduction Anglais)", |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.hotkey_translate_english)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(TEXT_WHITE),
+                            );
+                        });
+                        cfg_field(ui, "Timeout (s)", |ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut self.timeout_secs)
+                                    .range(1..=300)
+                                    .suffix(" s"),
+                            );
+                        });
+
+                        ui.add_space(8.0);
+
+                        // Checkboxes
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.restore_clipboard, "");
+                            ui.label(
+                                egui::RichText::new("Restore clipboard after operation")
+                                    .color(TEXT_WHITE)
+                                    .size(14.0),
+                            );
+                        });
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.show_notifications, "");
+                            ui.label(
+                                egui::RichText::new("Show notifications")
+                                    .color(TEXT_WHITE)
+                                    .size(14.0),
+                            );
+                        });
+
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("Restore clipboard after operation")
+                            egui::RichText::new("Raccourcis d'instructions personnalisés")
                                 .color(TEXT_WHITE)
+                                .strong()
                                 .size(14.0),
-                        );
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.show_notifications, "");
-                        ui.label(
-                            egui::RichText::new("Show notifications")
-                                .color(TEXT_WHITE)
-                                .size(14.0),
-                        );
-                    });
-
-                    ui.add_space(4.0);
-
-                    if !self.status_msg.is_empty() {
-                        ui.label(
-                            egui::RichText::new(&self.status_msg)
-                                .color(if self.status_ok { C_TEAL } else { C_RED })
-                                .size(12.5),
                         );
                         ui.add_space(4.0);
-                    }
 
-                    // ── MQTT Configuration ────────────────────────────────
-                    ui.add_space(12.0);
-                    ui.label(
-                        egui::RichText::new("MQTT Configuration")
-                            .color(TEXT_WHITE)
-                            .strong()
-                            .size(14.0),
-                    );
-                    ui.add_space(4.0);
-                    cfg_field(ui, "MQTT Broker", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.mqtt_broker)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "MQTT Username", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.mqtt_username)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "MQTT Password", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.mqtt_password)
-                                .password(true)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "MQTT Topic", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.mqtt_topic)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "MQTT Port", |ui| {
-                        ui.add(egui::DragValue::new(&mut self.mqtt_port).range(1..=65535));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.mqtt_use_tls, "");
-                        ui.label(egui::RichText::new("Use TLS").color(TEXT_WHITE).size(14.0));
+                        let mut to_delete = None;
+                        for (idx, item) in self.custom_instructions.iter_mut().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut item.hotkey)
+                                        .hint_text("Raccourci (ex: Ctrl+Shift+Win+K)")
+                                        .desired_width(160.0)
+                                        .text_color(TEXT_WHITE),
+                                );
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut item.instruction)
+                                        .hint_text("Instruction (ex: Résumer)")
+                                        .desired_width(ui.available_width() - 40.0)
+                                        .text_color(TEXT_WHITE),
+                                );
+                                if ui.button("❌").clicked() {
+                                    to_delete = Some(idx);
+                                }
+                            });
+                            ui.add_space(4.0);
+                        }
+                        if let Some(idx) = to_delete {
+                            self.custom_instructions.remove(idx);
+                        }
+
+                        if ui.button("+ Ajouter une instruction").clicked() {
+                            self.custom_instructions
+                                .push(crate::config::CustomInstructionHotkey {
+                                    hotkey: "Ctrl+Shift+Win+K".to_string(),
+                                    instruction: "".to_string(),
+                                });
+                        }
                     });
 
-                    // ── S3 Configuration ──────────────────────────────────
-                    ui.add_space(12.0);
-                    ui.label(
-                        egui::RichText::new("S3 / MinIO Configuration")
-                            .color(TEXT_WHITE)
-                            .strong()
-                            .size(14.0),
-                    );
-                    ui.add_space(4.0);
-                    cfg_field(ui, "S3 Endpoint", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.s3_endpoint)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "S3 Bucket", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.s3_bucket)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "S3 Secret Key", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.s3_secret_key)
-                                .password(true)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-
-                    // ── Vision Configuration ──────────────────────────────
-                    ui.add_space(12.0);
-                    ui.label(
-                        egui::RichText::new("Vision / Screenshot Analysis")
-                            .color(TEXT_WHITE)
-                            .strong()
-                            .size(14.0),
-                    );
-                    ui.add_space(4.0);
-                    cfg_field(ui, "Vision Model", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.vision_model)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                    cfg_field(ui, "Screenshot Hotkey", |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.vision_hotkey)
-                                .desired_width(f32::INFINITY)
-                                .text_color(TEXT_WHITE),
-                        );
-                    });
-                });
-
-                // Buttons — bottom right: Cancel (gray) | Save (green)
                 ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Status message & action buttons at the bottom of the window
+                if !self.status_msg.is_empty() {
+                    ui.label(
+                        egui::RichText::new(&self.status_msg)
+                            .color(if self.status_ok { C_TEAL } else { C_RED })
+                            .size(12.5),
+                    );
+                    ui.add_space(8.0);
+                }
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if green_button(ui, "Save", 100.0, 36.0) {
                         self.save_config();
@@ -660,6 +638,9 @@ impl ThothGuiApp {
         self.config.behavior.show_notifications = self.show_notifications;
         self.config.behavior.debounce_ms = self.debounce_ms;
         self.config.behavior.hotkey = self.hotkey.clone();
+        self.config.behavior.hotkey_translate_system = self.hotkey_translate_system.clone();
+        self.config.behavior.hotkey_translate_english = self.hotkey_translate_english.clone();
+        self.config.behavior.custom_instructions = self.custom_instructions.clone();
 
         self.config.mqtt.broker = self.mqtt_broker.clone();
         self.config.mqtt.username = self.mqtt_username.clone();
