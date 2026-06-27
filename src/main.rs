@@ -198,11 +198,7 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
             thoth::gui::GuiMode::Prompt
         };
 
-        let mut options = eframe::NativeOptions {
-            #[cfg(windows)]
-            renderer: eframe::Renderer::Wgpu,
-            ..Default::default()
-        };
+        let mut options = eframe::NativeOptions::default();
 
         // ── Window icon ──────────────────────────────────────────────────────
         // Embedded at compile time — no runtime file dependency
