@@ -3,21 +3,14 @@ set -euo pipefail
 
 # ============================================================
 # local-ci.sh
-# Exécute les mêmes checks que la pipeline GitHub Actions,
-# mais en local pour un feedback plus rapide.
+# Miroir de la CI GitHub, adapté à la plateforme hôte.
+# Usage : ./local-ci.sh
 #
-# Usage :
-#   chmod +x local-ci.sh
-#   ./local-ci.sh
-#
-# Étapes :
-#   1. cargo fmt --check
-#   2. cargo clippy --workspace --all-targets
-#   3. cargo test --workspace --all-features
-#   4. cargo build --release (vérifie que la compilation release passe)
-#   5. cargo outdated (si installé)
-#   6. cargo audit    (si installé)
-#   7. cargo udeps    (si installé)
+# Phases (calquées sur .github/workflows/ci.yml) :
+#   1. precheck  → actionlint + fmt
+#   2. check     → clippy + tests (+ deny si installé)
+#   3. build     → cargo build --release
+#   4. extras    → outdated / audit / udeps (si installés)
 # ============================================================
 
 GREEN='\033[0;32m'
@@ -26,6 +19,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 PASS=0
 FAIL=0
+
+OS="$(uname -s)"
 
 check() {
     local name="$1"
@@ -42,19 +37,28 @@ check() {
 }
 
 echo -e "${YELLOW}══════════════════════════════════════${NC}"
-echo -e "${YELLOW}  Local CI — Thoth${NC}"
+echo -e "${YELLOW}  Local CI — Thoth (${OS})${NC}"
 echo -e "${YELLOW}  $(date)${NC}"
 echo -e "${YELLOW}══════════════════════════════════════${NC}"
 echo
 
-# --- Obligatoires (bloquants dans la pipeline) ---
+# ── Phase 1 : Precheck ────────────────────────────────────
+
+if command -v actionlint &>/dev/null; then
+    check "actionlint" actionlint
+else
+    echo -e "${YELLOW}⚠ actionlint non installé — saute (go install github.com/rhysd/actionlint/cmd/actionlint@latest)${NC}"
+fi
 
 check "cargo fmt" cargo fmt --all --check
+
+# ── Phase 2 : Check (clippy + tests) ──────────────────────
+
 check "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
 
-# Vérifie les bibliothèques système requises sur Linux (xcb, xi, gtk, xkbcommon…)
+# Vérifie les bibliothèques système requises sur Linux
 LINUX_DEPS_OK=true
-if [[ "$(uname -s)" == "Linux" ]]; then
+if [[ "$OS" == "Linux" ]]; then
     MISSING_PKGS=()
     for lib in xcb xi gtk+-3.0 xkbcommon xtst; do
         if ! pkg-config --exists "$lib" 2>/dev/null; then
@@ -62,7 +66,6 @@ if [[ "$(uname -s)" == "Linux" ]]; then
             LINUX_DEPS_OK=false
         fi
     done
-    # libxdo n'a pas de fichier .pc — vérification via ldconfig
     if ! grep -q "libxdo\.so" <<< "$(ldconfig -p 2>/dev/null)"; then
         MISSING_PKGS+=("libxdo")
         LINUX_DEPS_OK=false
@@ -88,24 +91,24 @@ if [ "$LINUX_DEPS_OK" = true ]; then
     else
         check "cargo test" cargo test --workspace --all-features
     fi
+fi
+
+# ── Phase 3 : Build release (fast) ─────────────────────────
+# Miroir du job build-windows-fast / la phase release de la CI
+
+if [ "$LINUX_DEPS_OK" = true ]; then
     check "cargo build --release" cargo build --release
 fi
 
-
-# --- Outils de la CI (exécutés si installés en local) ---
-
-if command -v actionlint &>/dev/null; then
-    check "actionlint" actionlint
-else
-    echo -e "${YELLOW}⚠ actionlint non installé — saute (go install github.com/rhysd/actionlint/cmd/actionlint@latest)${NC}"
+# deny : miroir de la CI (exécuté sur push)
+if command -v cargo-deny &>/dev/null; then
+    check "cargo deny" cargo deny check
 fi
+
+# ── Phase 4 : Extras (hors CI, optionnels) ─────────────────
 
 if command -v typos &>/dev/null; then
     check "typos" typos
-fi
-
-if command -v cargo-deny &>/dev/null; then
-    check "cargo deny" cargo deny check
 fi
 
 if command -v cargo-outdated &>/dev/null; then
@@ -120,7 +123,7 @@ if command -v cargo-udeps &>/dev/null; then
     check "cargo udeps" cargo +nightly udeps --all-targets
 fi
 
-# --- Résumé ---
+# ── Résumé ─────────────────────────────────────────────────
 
 echo -e "${YELLOW}══════════════════════════════════════${NC}"
 echo -e "  Résumé : ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}"
