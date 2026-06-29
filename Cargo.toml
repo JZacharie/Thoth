@@ -25,7 +25,7 @@ rfd = "0.17"
 directories = "6"
 libc = "0.2"
 keyring = { version = "3" }
-xcap = "0.4"
+xcap = "0.9"
 rumqttc = { version = "0.25", default-features = false, features = ["websocket", "use-rustls"] }
 base64 = "0.22"
 dotenvy = "0.15"
