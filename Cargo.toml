@@ -24,7 +24,7 @@ eframe = { version = "0.34", default-features = false, features = ["glow", "defa
 rfd = "0.17"
 directories = "6"
 libc = "0.2"
-keyring = { version = "3" }
+keyring = { version = "4" }
 xcap = "0.4"
 rumqttc = { version = "0.25", default-features = false, features = ["websocket", "use-rustls"] }
 base64 = "0.22"
