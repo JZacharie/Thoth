@@ -26,6 +26,7 @@ mod tray_impl {
         reset_stats: &'static str,
         logs: &'static str,
         quit: &'static str,
+        about: &'static str,
         tooltip: &'static str,
     }
 
@@ -42,6 +43,7 @@ mod tray_impl {
                 reset_stats: "Réinitialiser les stats",
                 logs: "Journaux",
                 quit: "Quitter",
+                about: "À propos",
                 tooltip: "Thoth — Traducteur instantané",
             },
             _ => MenuStrings {
@@ -55,6 +57,7 @@ mod tray_impl {
                 reset_stats: "Reset statistics",
                 logs: "Logs",
                 quit: "Quit",
+                about: "About",
                 tooltip: "Thoth — Instant translator",
             },
         }
@@ -68,6 +71,7 @@ mod tray_impl {
         stats_item: MenuItem,
         reset_stats_item: MenuItem,
         logs_item: MenuItem,
+        about_item: MenuItem,
         quit_item: MenuItem,
     }
 
@@ -102,6 +106,7 @@ mod tray_impl {
         let stats_item = MenuItem::new(s.stats, true, None);
         let reset_stats_item = MenuItem::new(s.reset_stats, true, None);
         let logs_item = MenuItem::new(s.logs, true, None);
+        let about_item = MenuItem::new(s.about, true, None);
         let quit_item = MenuItem::new(s.quit, true, None);
 
         menu.append(&status_item)?;
@@ -115,6 +120,8 @@ mod tray_impl {
         menu.append(&reset_stats_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&logs_item)?;
+        menu.append(&PredefinedMenuItem::separator())?;
+        menu.append(&about_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit_item)?;
 
@@ -141,6 +148,7 @@ mod tray_impl {
                 stats_item,
                 reset_stats_item,
                 logs_item,
+                about_item,
                 quit_item,
             },
             s,
@@ -250,6 +258,14 @@ mod tray_impl {
                 open_log(log_path);
             } else {
                 tracing::warn!("log file not found: {}", log_path.display());
+            }
+            return false;
+        }
+
+        let about_id = items.about_item.id();
+        if *event_id == about_id {
+            if let Ok(exe_path) = std::env::current_exe() {
+                let _ = std::process::Command::new(exe_path).arg("--about").spawn();
             }
             return false;
         }

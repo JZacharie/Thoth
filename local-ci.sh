@@ -50,6 +50,10 @@ else
     echo -e "${YELLOW}⚠ actionlint non installé — saute (go install github.com/rhysd/actionlint/cmd/actionlint@latest)${NC}"
 fi
 
+if ! cargo fmt --all --check &>/dev/null; then
+    echo -e "${YELLOW}⚠ Formatage incorrect détecté. Correction par cargo fmt...${NC}"
+    cargo fmt --all
+fi
 check "cargo fmt" cargo fmt --all --check
 
 # ── Phase 2 : Check (clippy + tests) ──────────────────────

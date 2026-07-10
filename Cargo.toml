@@ -36,6 +36,9 @@ rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustl
 development = []
 normal = []
 
+[build-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
 [dev-dependencies]
 wiremock = "0.6"
 

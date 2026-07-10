@@ -97,7 +97,7 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     thoth::set_insecure(is_insecure);
     let is_gui = args
         .iter()
-        .any(|arg| arg == "--prompt" || arg == "--config" || arg == "--stats");
+        .any(|arg| arg == "--prompt" || arg == "--config" || arg == "--stats" || arg == "--about");
 
     #[cfg(windows)]
     {
@@ -185,6 +185,8 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
                 "config"
             } else if args.iter().any(|arg| arg == "--stats") {
                 "stats"
+            } else if args.iter().any(|arg| arg == "--about") {
+                "about"
             } else {
                 "prompt"
             }
@@ -193,6 +195,8 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
             thoth::gui::GuiMode::Config
         } else if args.iter().any(|arg| arg == "--stats") {
             thoth::gui::GuiMode::Stats
+        } else if args.iter().any(|arg| arg == "--about") {
+            thoth::gui::GuiMode::About
         } else {
             thoth::gui::GuiMode::Prompt
         };
@@ -219,6 +223,7 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
                 thoth::gui::GuiMode::Config => eframe::egui::vec2(480.0, 620.0),
                 thoth::gui::GuiMode::Stats => eframe::egui::vec2(540.0, 480.0),
                 thoth::gui::GuiMode::Prompt => eframe::egui::vec2(480.0, 400.0),
+                thoth::gui::GuiMode::About => eframe::egui::vec2(380.0, 300.0),
             })
             .with_resizable(true);
 

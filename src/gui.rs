@@ -46,6 +46,7 @@ pub enum GuiMode {
     Prompt,
     Config,
     Stats,
+    About,
 }
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -298,6 +299,7 @@ impl eframe::App for ThothGuiApp {
             GuiMode::Prompt => self.draw_prompt(ui),
             GuiMode::Config => self.draw_config(ui),
             GuiMode::Stats => self.draw_stats(ui),
+            GuiMode::About => self.draw_about(ui),
         }
     }
 }
@@ -772,6 +774,89 @@ impl ThothGuiApp {
                     if gray_button(ui, "Reset", 90.0, 32.0) {
                         UsageMetrics::default().save();
                     }
+                });
+            });
+    }
+
+    fn draw_about(&mut self, ui: &mut egui::Ui) {
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::NONE
+                    .fill(BG)
+                    .inner_margin(egui::Margin::same(PAD)),
+            )
+            .show_inside(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(
+                        egui::RichText::new("Thoth")
+                            .color(TEXT_WHITE)
+                            .strong()
+                            .size(32.0),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Instant Translator & Assistant")
+                            .color(TEXT_MUTED)
+                            .size(14.0),
+                    );
+                    ui.add_space(24.0);
+
+                    let card_frame = egui::Frame::NONE
+                        .fill(BG_CARD)
+                        .stroke(Stroke::new(1.0_f32, BORDER))
+                        .corner_radius(CornerRadius::same(ROUNDING))
+                        .inner_margin(egui::Margin::symmetric(24i8, 16i8));
+
+                    card_frame.show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("Version :")
+                                    .color(TEXT_MUTED)
+                                    .size(14.0),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(env!("CARGO_PKG_VERSION"))
+                                            .color(TEXT_WHITE)
+                                            .strong()
+                                            .size(14.0),
+                                    );
+                                },
+                            );
+                        });
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(12.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("Date de compilation :")
+                                    .color(TEXT_MUTED)
+                                    .size(14.0),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(env!("BUILD_DATE"))
+                                            .color(TEXT_WHITE)
+                                            .strong()
+                                            .size(14.0),
+                                    );
+                                },
+                            );
+                        });
+                    });
+
+                    ui.add_space(30.0);
+                    ui.label(
+                        egui::RichText::new("© 2026 JZacharie/Thoth")
+                            .color(TEXT_MUTED)
+                            .size(12.0),
+                    );
                 });
             });
     }
