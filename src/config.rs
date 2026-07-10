@@ -28,9 +28,9 @@ pub struct PylosConfig {
 impl Default for PylosConfig {
     fn default() -> Self {
         Self {
-            endpoint: "https://pylos-dev.p.zacharie.org".into(),
-            model: "gemini4:e2b".into(),
-            fallback_model: Some("gemma4:12b".into()),
+            endpoint: "https://api.groq.com/openai".into(),
+            model: "llama-3.1-8b-instant".into(),
+            fallback_model: Some("llama-3.3-70b-specdec".into()),
             timeout_secs: 120,
             secret: std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default(),
         }
@@ -371,9 +371,9 @@ mod tests {
     #[test]
     fn test_pylos_default() {
         let cfg = PylosConfig::default();
-        assert_eq!(cfg.endpoint, "https://pylos-dev.p.zacharie.org");
-        assert_eq!(cfg.model, "gemini4:e2b");
-        assert_eq!(cfg.fallback_model, Some("gemma4:12b".into()));
+        assert_eq!(cfg.endpoint, "https://api.groq.com/openai");
+        assert_eq!(cfg.model, "llama-3.1-8b-instant");
+        assert_eq!(cfg.fallback_model, Some("llama-3.3-70b-specdec".into()));
         assert_eq!(cfg.timeout_secs, 120);
         let env_val = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
         assert_eq!(cfg.secret, env_val);
