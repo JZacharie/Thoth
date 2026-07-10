@@ -431,15 +431,24 @@ mod platform_macos {
                         }
                         if let Some(key_name) = key_to_str(&key) {
                             pressed.lock().unwrap().insert(key_name.to_string());
+                        } else if let Some(ref name) = event.name {
+                            pressed.lock().unwrap().insert(name.to_lowercase());
                         }
                     }
                     EventType::KeyRelease(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().remove(mod_name);
                         }
+                        let mut key_name_to_remove = None;
                         if let Some(key_name) = key_to_str(&key) {
+                            key_name_to_remove = Some(key_name.to_string());
+                        } else if let Some(ref name) = event.name {
+                            key_name_to_remove = Some(name.to_lowercase());
+                        }
+
+                        if let Some(kname) = key_name_to_remove {
                             let mut p = pressed.lock().unwrap();
-                            p.remove(key_name);
+                            p.remove(&kname);
                             let mut action = None;
                             if match_pattern(&p, &hotkey_config.translate_system) {
                                 action = Some(HotkeyAction::TranslateDefault);
@@ -574,15 +583,24 @@ mod platform_linux {
                         }
                         if let Some(key_name) = key_to_str(&key) {
                             pressed.lock().unwrap().insert(key_name.to_string());
+                        } else if let Some(ref name) = event.name {
+                            pressed.lock().unwrap().insert(name.to_lowercase());
                         }
                     }
                     EventType::KeyRelease(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().remove(mod_name);
                         }
+                        let mut key_name_to_remove = None;
                         if let Some(key_name) = key_to_str(&key) {
+                            key_name_to_remove = Some(key_name.to_string());
+                        } else if let Some(ref name) = event.name {
+                            key_name_to_remove = Some(name.to_lowercase());
+                        }
+
+                        if let Some(kname) = key_name_to_remove {
                             let mut p = pressed.lock().unwrap();
-                            p.remove(key_name);
+                            p.remove(&kname);
                             let mut action = None;
                             if match_pattern(&p, &hotkey_config.translate_system) {
                                 action = Some(HotkeyAction::TranslateDefault);

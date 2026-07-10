@@ -11,6 +11,18 @@ use crate::config::PylosConfig;
 struct ChatRequest {
     model: String,
     messages: Vec<Message>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+}
+
+impl ChatRequest {
+    fn new(model: String, messages: Vec<Message>) -> Self {
+        Self {
+            model,
+            messages,
+            temperature: Some(0.2),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -231,9 +243,9 @@ impl PylosClient {
         target_lang: &str,
     ) -> Result<String> {
         let (anon_text, mapping) = anonymize(text);
-        let request = ChatRequest {
-            model: model.into(),
-            messages: vec![
+        let request = ChatRequest::new(
+            model.into(),
+            vec![
                 Message {
                     role: "system".into(),
                     content: self.build_prompt(target_lang),
@@ -243,7 +255,7 @@ impl PylosClient {
                     content: anon_text,
                 },
             ],
-        };
+        );
 
         let response = self
             .client
@@ -300,9 +312,9 @@ impl PylosClient {
     pub async fn execute_instruction(&self, text: &str) -> Result<String> {
         let (anon_text, mapping) = anonymize(text);
         let system_prompt = self.build_instruction_prompt();
-        let request = ChatRequest {
-            model: self.config.model.clone(),
-            messages: vec![
+        let request = ChatRequest::new(
+            self.config.model.clone(),
+            vec![
                 Message {
                     role: "system".into(),
                     content: system_prompt.clone(),
@@ -312,7 +324,7 @@ impl PylosClient {
                     content: anon_text.clone(),
                 },
             ],
-        };
+        );
 
         let result = self
             .client
@@ -330,9 +342,9 @@ impl PylosClient {
                 tracing::warn!("primary model failed on instruction: {e}, trying fallback");
                 match &self.config.fallback_model {
                     Some(fallback) => {
-                        let request_fallback = ChatRequest {
-                            model: fallback.clone(),
-                            messages: vec![
+                        let request_fallback = ChatRequest::new(
+                            fallback.clone(),
+                            vec![
                                 Message {
                                     role: "system".into(),
                                     content: system_prompt,
@@ -342,7 +354,7 @@ impl PylosClient {
                                     content: anon_text.clone(),
                                 },
                             ],
-                        };
+                        );
                         self.client
                             .post(format!("{}/v1/chat/completions", self.config.endpoint))
                             .header("X-Thoth-Secret", &self.config.secret)
@@ -399,13 +411,13 @@ impl PylosClient {
         text: &str,
     ) -> Result<String> {
         let full_message = format!("{}\n\n{}", user_prompt, text);
-        let request = ChatRequest {
-            model: self.config.model.clone(),
-            messages: vec![Message {
+        let request = ChatRequest::new(
+            self.config.model.clone(),
+            vec![Message {
                 role: "user".into(),
                 content: full_message,
             }],
-        };
+        );
 
         let result = self
             .client
@@ -423,13 +435,13 @@ impl PylosClient {
                 tracing::warn!("primary model failed on custom prompt: {e}, trying fallback");
                 match &self.config.fallback_model {
                     Some(fallback) => {
-                        let request_fallback = ChatRequest {
-                            model: fallback.clone(),
-                            messages: vec![Message {
+                        let request_fallback = ChatRequest::new(
+                            fallback.clone(),
+                            vec![Message {
                                 role: "user".into(),
                                 content: format!("{}\n\n{}", user_prompt, text),
                             }],
-                        };
+                        );
                         self.client
                             .post(format!("{}/v1/chat/completions", self.config.endpoint))
                             .header("X-Thoth-Secret", &self.config.secret)
@@ -483,9 +495,9 @@ impl PylosClient {
 
     pub async fn reformulate(&self, text: &str) -> Result<String> {
         let system_prompt = self.build_reformulate_prompt(text);
-        let request = ChatRequest {
-            model: self.config.model.clone(),
-            messages: vec![
+        let request = ChatRequest::new(
+            self.config.model.clone(),
+            vec![
                 Message {
                     role: "system".into(),
                     content: system_prompt.clone(),
@@ -495,7 +507,7 @@ impl PylosClient {
                     content: text.into(),
                 },
             ],
-        };
+        );
 
         let result = self
             .client
@@ -513,9 +525,9 @@ impl PylosClient {
                 tracing::warn!("primary model failed on reformulate: {e}, trying fallback");
                 match &self.config.fallback_model {
                     Some(fallback) => {
-                        let request_fallback = ChatRequest {
-                            model: fallback.clone(),
-                            messages: vec![
+                        let request_fallback = ChatRequest::new(
+                            fallback.clone(),
+                            vec![
                                 Message {
                                     role: "system".into(),
                                     content: system_prompt,
@@ -525,7 +537,7 @@ impl PylosClient {
                                     content: text.into(),
                                 },
                             ],
-                        };
+                        );
                         self.client
                             .post(format!("{}/v1/chat/completions", self.config.endpoint))
                             .header("X-Thoth-Secret", &self.config.secret)

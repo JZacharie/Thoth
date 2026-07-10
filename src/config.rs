@@ -30,7 +30,7 @@ impl Default for PylosConfig {
         Self {
             endpoint: "https://api.groq.com/openai".into(),
             model: "llama-3.1-8b-instant".into(),
-            fallback_model: Some("llama-3.3-70b-specdec".into()),
+            fallback_model: Some("llama-3.3-70b-versatile".into()),
             timeout_secs: 120,
             secret: std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default(),
         }
@@ -373,7 +373,7 @@ mod tests {
         let cfg = PylosConfig::default();
         assert_eq!(cfg.endpoint, "https://api.groq.com/openai");
         assert_eq!(cfg.model, "llama-3.1-8b-instant");
-        assert_eq!(cfg.fallback_model, Some("llama-3.3-70b-specdec".into()));
+        assert_eq!(cfg.fallback_model, Some("llama-3.3-70b-versatile".into()));
         assert_eq!(cfg.timeout_secs, 120);
         let env_val = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
         assert_eq!(cfg.secret, env_val);
@@ -395,7 +395,7 @@ mod tests {
     fn test_config_default() {
         let cfg = Config::default();
         let sys = system_language();
-        assert_eq!(cfg.pylos.model, "gemini4:e2b");
+        assert_eq!(cfg.pylos.model, "llama-3.1-8b-instant");
         assert_eq!(cfg.behavior.target_language, sys);
     }
 
