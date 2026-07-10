@@ -455,19 +455,34 @@ impl PylosClient {
         Ok(content)
     }
 
-    fn build_reformulate_prompt(&self) -> String {
-        "Tu es un rédacteur et communicant d'exception spécialisé dans la clarification textuelle.\n\
-         Ton objectif est de reformuler, clarifier les idées et restructurer le texte fourni pour le rendre extrêmement fluide, compréhensible et percutant, tout en préservant fidèlement son sens d'origine.\n\
-         Règles strictes :\n\
-         - Améliore le style, élimine les redondances et structure les arguments logiquement.\n\
-         - Conserve le même niveau de langue (ou rends-le professionnel si familier).\n\
-         - Retourne UNIQUEMENT le texte reformulé final.\n\
-         - Ne commence JAMAIS par des formules de politesse, des introductions, ou des commentaires sur les changements apportés.\n\
-         - Ne mets aucun guillemet ni bloc de code markdown autour de ton texte.".to_string()
+    fn build_reformulate_prompt(&self, text: &str) -> String {
+        let word_count = text.split_whitespace().count();
+        let length_instruction = if word_count <= 15 {
+            "Le texte initial est très court. Reste extrêmement bref et direct, limite la reformulation à une phrase ou deux maximum."
+        } else if word_count <= 80 {
+            "Le texte initial est de taille moyenne. Sois concis, va droit au but et évite d'allonger inutilement le message."
+        } else {
+            "Le texte initial est long. Reste synthétique, va à l'essentiel et structure le texte pour éviter tout effet de \"pavé\" lourd à lire."
+        };
+
+        format!(
+            "Tu es un rédacteur et communicant d'exception spécialisé dans la clarification textuelle.\n\
+             Ton objectif est de reformuler, clarifier les idées et restructurer le texte fourni pour le rendre extrêmement fluide, compréhensible et percutant, tout en préservant fidèlement son sens d'origine.\n\
+             Règles strictes :\n\
+             - Améliore le style, élimine les redondances et structure les arguments logiquement.\n\
+             - Conserve le même niveau de langue (ou rends-le professionnel si familier).\n\
+             - Reste humain, adopte un style d'écriture naturel et fluide, et évite absolument de donner la sensation que le message a été réécrit par un grand modèle de langage (LLM).\n\
+             - N'utilise JAMAIS de mise en gras (pas de double astérisque **).\n\
+             - {}\n\
+             - Retourne UNIQUEMENT le texte reformulé final.\n\
+             - Ne commence JAMAIS par des formules de politesse, des introductions, ou des commentaires sur les changements apportés.\n\
+             - Ne mets aucun guillemet ni bloc de code markdown autour de ton texte.",
+            length_instruction
+        )
     }
 
     pub async fn reformulate(&self, text: &str) -> Result<String> {
-        let system_prompt = self.build_reformulate_prompt();
+        let system_prompt = self.build_reformulate_prompt(text);
         let request = ChatRequest {
             model: self.config.model.clone(),
             messages: vec![
