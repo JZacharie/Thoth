@@ -429,26 +429,28 @@ mod platform_macos {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().insert(mod_name.to_string());
                         }
+                        let mut p = pressed.lock().unwrap();
                         if let Some(key_name) = key_to_str(&key) {
-                            pressed.lock().unwrap().insert(key_name.to_string());
-                        } else if let Some(ref name) = event.name {
-                            pressed.lock().unwrap().insert(name.to_lowercase());
+                            p.insert(key_name.to_string());
+                        }
+                        if let Some(ref name) = event.name {
+                            p.insert(name.to_lowercase());
                         }
                     }
                     EventType::KeyRelease(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().remove(mod_name);
                         }
-                        let mut key_name_to_remove = None;
+                        let mut keys_to_remove: Vec<String> = Vec::new();
                         if let Some(key_name) = key_to_str(&key) {
-                            key_name_to_remove = Some(key_name.to_string());
-                        } else if let Some(ref name) = event.name {
-                            key_name_to_remove = Some(name.to_lowercase());
+                            keys_to_remove.push(key_name.to_string());
+                        }
+                        if let Some(ref name) = event.name {
+                            keys_to_remove.push(name.to_lowercase());
                         }
 
-                        if let Some(kname) = key_name_to_remove {
+                        if !keys_to_remove.is_empty() {
                             let mut p = pressed.lock().unwrap();
-                            p.remove(&kname);
                             let mut action = None;
                             if match_pattern(&p, &hotkey_config.translate_system) {
                                 action = Some(HotkeyAction::TranslateDefault);
@@ -480,6 +482,11 @@ mod platform_macos {
                                     }
                                 }
                             }
+
+                            for k in &keys_to_remove {
+                                p.remove(k);
+                            }
+
                             if let Some(action) = action
                                 && tx_clone.try_send(action).is_err()
                             {
@@ -513,7 +520,12 @@ mod platform_linux {
             Key::ControlLeft | Key::ControlRight => Some("ctrl"),
             Key::Alt | Key::AltGr => Some("alt"),
             Key::ShiftLeft | Key::ShiftRight => Some("shift"),
-            Key::MetaLeft | Key::MetaRight | Key::Unknown(133) | Key::Unknown(134) => Some("win"),
+            Key::MetaLeft
+            | Key::MetaRight
+            | Key::Unknown(125)
+            | Key::Unknown(126)
+            | Key::Unknown(133)
+            | Key::Unknown(134) => Some("win"),
             _ => None,
         }
     }
@@ -562,11 +574,24 @@ mod platform_linux {
         }
     }
 
+    fn check_input_permissions() {
+        let dev_input = std::path::Path::new("/dev/input/event0");
+        if dev_input.exists() && std::fs::File::open(dev_input).is_err() {
+            tracing::warn!(
+                "Cannot read /dev/input/event* — are you in the 'input' group? \
+                 Global hotkeys will NOT work on Wayland without it. \
+                 Run: sudo usermod -aG input $USER && relogin"
+            );
+        }
+    }
+
     pub fn start(
         tx: mpsc::Sender<HotkeyAction>,
         hotkey_config: HotkeyConfig,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
+        check_input_permissions();
+
         let pressed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
         let tx_clone = tx.clone();
         let enabled_clone = enabled.clone();
@@ -581,26 +606,41 @@ mod platform_linux {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().insert(mod_name.to_string());
                         }
+                        let mut p = pressed.lock().unwrap();
                         if let Some(key_name) = key_to_str(&key) {
-                            pressed.lock().unwrap().insert(key_name.to_string());
-                        } else if let Some(ref name) = event.name {
-                            pressed.lock().unwrap().insert(name.to_lowercase());
+                            p.insert(key_name.to_string());
                         }
+                        if let Some(ref name) = event.name {
+                            p.insert(name.to_lowercase());
+                        }
+                        tracing::trace!(
+                            "KeyPress: {:?}, event.name: {:?}, pressed keys: {:?}",
+                            key,
+                            event.name,
+                            *p
+                        );
                     }
                     EventType::KeyRelease(key) => {
                         if let Some(mod_name) = modifier_from_key(&key) {
                             pressed.lock().unwrap().remove(mod_name);
                         }
-                        let mut key_name_to_remove = None;
+                        let mut keys_to_remove: Vec<String> = Vec::new();
                         if let Some(key_name) = key_to_str(&key) {
-                            key_name_to_remove = Some(key_name.to_string());
-                        } else if let Some(ref name) = event.name {
-                            key_name_to_remove = Some(name.to_lowercase());
+                            keys_to_remove.push(key_name.to_string());
+                        }
+                        if let Some(ref name) = event.name {
+                            keys_to_remove.push(name.to_lowercase());
                         }
 
-                        if let Some(kname) = key_name_to_remove {
+                        if !keys_to_remove.is_empty() {
                             let mut p = pressed.lock().unwrap();
-                            p.remove(&kname);
+                            tracing::trace!(
+                                "KeyRelease: {:?}, event.name: {:?}, keys_to_remove: {:?}, pressed keys before match: {:?}",
+                                key,
+                                event.name,
+                                keys_to_remove,
+                                *p
+                            );
                             let mut action = None;
                             if match_pattern(&p, &hotkey_config.translate_system) {
                                 action = Some(HotkeyAction::TranslateDefault);
@@ -632,6 +672,11 @@ mod platform_linux {
                                     }
                                 }
                             }
+
+                            for k in &keys_to_remove {
+                                p.remove(k);
+                            }
+
                             if let Some(action) = action
                                 && tx_clone.try_send(action).is_err()
                             {
@@ -642,7 +687,9 @@ mod platform_linux {
                     _ => {}
                 }
             }) {
-                tracing::error!("rdev listen failed: {e:?}");
+                tracing::error!(
+                    "rdev listen failed: {e:?}. On Wayland, ensure your user is in the 'input' group (sudo usermod -aG input $USER && relogin). On X11, install libxrecord-dev."
+                );
             }
         });
         Ok(())
