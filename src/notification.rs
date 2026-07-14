@@ -51,7 +51,75 @@ mod platform {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "linux")]
+mod platform {
+    use notify_rust::Notification;
+    use std::process::Command;
+
+    fn fallback_notify(summary: &str, body: &str) {
+        if Command::new("notify-send")
+            .args([summary, body])
+            .output()
+            .is_ok()
+        {
+            return;
+        }
+        if Command::new("dunstify")
+            .args([summary, body])
+            .output()
+            .is_ok()
+        {
+            return;
+        }
+        tracing::debug!("no notification daemon found (install dunst, mako, or notify-send)");
+    }
+
+    fn try_notify(summary: &str, body: &str, timeout: notify_rust::Timeout) {
+        if let Err(e) = Notification::new()
+            .summary(summary)
+            .body(body)
+            .timeout(timeout)
+            .show()
+        {
+            tracing::warn!("notification via notify-rust failed: {e}, trying fallback");
+            fallback_notify(summary, body);
+        }
+    }
+
+    pub fn notify_success() {
+        try_notify(
+            "Thoth",
+            "✓ Texte traduit avec succès",
+            notify_rust::Timeout::Milliseconds(2000),
+        );
+    }
+
+    pub fn notify_error(context: &str) {
+        try_notify(
+            "Thoth",
+            &format!("✗ {context}"),
+            notify_rust::Timeout::Milliseconds(4000),
+        );
+    }
+
+    pub fn notify_warning(context: &str) {
+        try_notify(
+            "Thoth",
+            &format!("⚠ {context}"),
+            notify_rust::Timeout::Milliseconds(4000),
+        );
+    }
+
+    pub fn notify_screenshot_analysis() {
+        try_notify(
+            "Thoth",
+            "📷 Analyse d'écran en cours…",
+            notify_rust::Timeout::Milliseconds(2000),
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
 mod platform {
     use notify_rust::Notification;
 

@@ -205,10 +205,10 @@ impl Orchestrator {
                     t
                 }
                 Err(e) => {
-                    tracing::error!("clipboard copy failed: {e}");
-                    self.metrics.record_error();
-                    self.metrics.save();
-                    notification::notify_error("Impossible de copier le texte");
+                    tracing::warn!(
+                        "clipboard copy failed: {e} — no text selected or clipboard inaccessible"
+                    );
+                    notification::notify_warning("Aucun texte sélectionné");
                     continue;
                 }
             };

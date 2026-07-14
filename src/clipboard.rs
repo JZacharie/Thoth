@@ -23,9 +23,15 @@ impl ClipboardManager {
         let text = loop {
             platform::simulate_copy()?;
             std::thread::sleep(Duration::from_millis(150));
-            let text = self.inner.get_text()?;
-            if !text.is_empty() || attempts >= 3 {
-                break text;
+            match self.inner.get_text() {
+                Ok(t) if !t.is_empty() => break t,
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!("clipboard get_text failed (attempt {attempts}): {e}");
+                }
+            }
+            if attempts >= 3 {
+                break String::new();
             }
             attempts += 1;
             std::thread::sleep(Duration::from_millis(100 * attempts));
