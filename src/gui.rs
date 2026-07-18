@@ -314,7 +314,7 @@ impl ThothGuiApp {
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 // ── Textarea ──────────────────────────────────────────────
                 let input_frame = egui::Frame::NONE
                     .fill(BG_CARD)
@@ -470,7 +470,7 @@ impl ThothGuiApp {
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.label(
                     egui::RichText::new("Configuration")
                         .color(TEXT_WHITE)
@@ -694,7 +694,7 @@ impl ThothGuiApp {
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 let metrics = UsageMetrics::load();
                 let avail_w = ui.available_width();
                 let card_w = (avail_w - 12.0) / 2.0;
@@ -785,7 +785,7 @@ impl ThothGuiApp {
                     .fill(BG)
                     .inner_margin(egui::Margin::same(PAD)),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(20.0);
                     ui.label(

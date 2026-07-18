@@ -20,7 +20,7 @@ pub fn show_prompt_dialog() -> Result<String> {
 
     impl eframe::App for App {
         fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
-            eframe::egui::CentralPanel::default().show_inside(ui, |ui| {
+            eframe::egui::CentralPanel::default().show(ui, |ui| {
                 ui.label("Entrez votre instruction personnalisée :");
                 let resp = ui.text_edit_singleline(&mut self.input);
                 resp.request_focus();
