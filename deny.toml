@@ -22,6 +22,9 @@ ignore = [
     "RUSTSEC-2026-0104",
     # memmap2: unsound pointer offset — dépendance transitive de xcap/smithay/winit, pas corrigeable directement
     "RUSTSEC-2026-0186",
+    # quick-xml: quadratic run time + unbounded NS allocation — dépendances transitives, pas de mise à jour directe possible
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
 
 [licenses]
