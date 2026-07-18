@@ -127,7 +127,7 @@ if (Get-Command cargo-deny -ErrorAction SilentlyContinue) {
 
 if (-not (Get-Command cargo-outdated -ErrorAction SilentlyContinue)) {
     Write-Host "cargo-outdated non installé. Installation via cargo install..." -ForegroundColor Yellow
-    cargo install cargo-outdated
+    cargo install --locked cargo-outdated
 }
 if (Get-Command cargo-outdated -ErrorAction SilentlyContinue) {
     Check-Command "cargo outdated" { cargo outdated }
@@ -137,7 +137,7 @@ if (Get-Command cargo-outdated -ErrorAction SilentlyContinue) {
 
 if (-not (Get-Command cargo-audit -ErrorAction SilentlyContinue)) {
     Write-Host "cargo-audit non installé. Installation via cargo install..." -ForegroundColor Yellow
-    cargo install cargo-audit
+    cargo install --locked cargo-audit
 }
 if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
     Check-Command "cargo audit" { cargo audit }
@@ -147,7 +147,7 @@ if (Get-Command cargo-audit -ErrorAction SilentlyContinue) {
 
 if (-not (Get-Command cargo-udeps -ErrorAction SilentlyContinue)) {
     Write-Host "cargo-udeps non installé. Installation via cargo install..." -ForegroundColor Yellow
-    cargo install cargo-udeps
+    cargo install --locked cargo-udeps
 }
 if (Get-Command cargo-udeps -ErrorAction SilentlyContinue) {
     if (-not (rustup toolchain list | Select-String "nightly")) {
