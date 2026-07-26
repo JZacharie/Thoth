@@ -4,7 +4,7 @@ use eframe::egui::{Color32, CornerRadius, FontId, Stroke, Vec2};
 use crate::clipboard::ClipboardManager;
 use crate::config::Config;
 use crate::metrics::UsageMetrics;
-use crate::pylos_client::PylosClient;
+use crate::groq_client::GroqClient;
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 // Based on the README screenshots: deep navy background, slightly lighter cards,
@@ -122,11 +122,11 @@ impl ThothGuiApp {
 
         Self {
             mode,
-            endpoint: config.pylos.endpoint.clone(),
-            model: config.pylos.model.clone(),
-            fallback_model: config.pylos.fallback_model.clone().unwrap_or_default(),
-            timeout_secs: config.pylos.timeout_secs,
-            secret: config.pylos.secret.clone(),
+            endpoint: config.groq.endpoint.clone(),
+            model: config.groq.model.clone(),
+            fallback_model: config.groq.fallback_model.clone().unwrap_or_default(),
+            timeout_secs: config.groq.timeout_secs,
+            secret: config.groq.secret.clone(),
             target_language: config.behavior.target_language.clone(),
             restore_clipboard: config.behavior.restore_clipboard,
             show_notifications: config.behavior.show_notifications,
@@ -179,15 +179,15 @@ impl ThothGuiApp {
             save_history(&self.history);
         }
 
-        let pylos = PylosClient::new(
-            self.config.pylos.clone(),
+        let groq = GroqClient::new(
+            self.config.groq.clone(),
             self.config.behavior.target_language.clone(),
         );
         let original = self.original_text.clone();
 
-        if crate::pylos_client::is_sensitive(&original) {
+        if crate::groq_client::is_sensitive(&original) {
             tracing::info!(
-                "PII Validation (GUI): Sensitive pattern detected. Text will be anonymized before sending to Groq/Pylos."
+                "PII Validation (GUI): Sensitive pattern detected. Text will be anonymized before sending to Groq."
             );
         } else {
             tracing::info!(
@@ -204,7 +204,7 @@ impl ThothGuiApp {
                 "Instruction : {}\n\nTexte à traiter :\n{}",
                 instruction, original
             );
-            match pylos.execute_instruction(&prompt).await {
+            match groq.execute_instruction(&prompt).await {
                 Ok(result) => {
                     if let Ok(mut cm) = ClipboardManager::new() {
                         #[cfg(windows)]
@@ -645,15 +645,15 @@ impl ThothGuiApp {
     }
 
     fn save_config(&mut self) {
-        self.config.pylos.endpoint = self.endpoint.clone();
-        self.config.pylos.model = self.model.clone();
-        self.config.pylos.fallback_model = if self.fallback_model.trim().is_empty() {
+        self.config.groq.endpoint = self.endpoint.clone();
+        self.config.groq.model = self.model.clone();
+        self.config.groq.fallback_model = if self.fallback_model.trim().is_empty() {
             None
         } else {
             Some(self.fallback_model.clone())
         };
-        self.config.pylos.timeout_secs = self.timeout_secs;
-        self.config.pylos.secret = self.secret.clone();
+        self.config.groq.timeout_secs = self.timeout_secs;
+        self.config.groq.secret = self.secret.clone();
         self.config.behavior.target_language = self.target_language.clone();
         self.config.behavior.restore_clipboard = self.restore_clipboard;
         self.config.behavior.show_notifications = self.show_notifications;

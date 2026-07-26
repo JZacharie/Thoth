@@ -8,16 +8,16 @@ pub mod metrics;
 pub mod mqtt;
 pub mod notification;
 pub mod orchestrator;
-pub mod pylos_client;
+pub mod groq_client;
 pub mod s3_storage;
 pub mod screenshot;
 pub mod secure_storage;
 pub mod tray;
 pub mod vision;
 
-pub use config::{BehaviorConfig, Config, PylosConfig, validate_language};
+pub use config::{BehaviorConfig, Config, GroqConfig, validate_language};
+pub use groq_client::{GroqClient, is_sensitive};
 pub use hotkey::{HotkeyKey, HotkeyPattern, Modifier};
-pub use pylos_client::{PylosClient, is_sensitive};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

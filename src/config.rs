@@ -16,7 +16,7 @@ pub fn system_language() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PylosConfig {
+pub struct GroqConfig {
     pub endpoint: String,
     pub model: String,
     pub fallback_model: Option<String>,
@@ -25,14 +25,14 @@ pub struct PylosConfig {
     pub secret: String,
 }
 
-impl Default for PylosConfig {
+impl Default for GroqConfig {
     fn default() -> Self {
         Self {
             endpoint: "https://api.groq.com/openai".into(),
             model: "llama-3.1-8b-instant".into(),
             fallback_model: Some("llama-3.3-70b-versatile".into()),
             timeout_secs: 120,
-            secret: std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default(),
+            secret: std::env::var("THOTH_GROQ_SECRET").unwrap_or_default(),
         }
     }
 }
@@ -161,7 +161,8 @@ impl Default for VisionConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
-    pub pylos: PylosConfig,
+    #[serde(alias = "pylos")]
+    pub groq: GroqConfig,
     pub behavior: BehaviorConfig,
     pub mqtt: MqttConfig,
     pub s3: S3Config,
@@ -293,8 +294,10 @@ mod win_secure {
 
 impl Config {
     fn resolve_secrets(mut config: Config) -> Config {
-        if config.pylos.secret.is_empty() {
-            config.pylos.secret = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
+        if config.groq.secret.is_empty() {
+            config.groq.secret = std::env::var("THOTH_GROQ_SECRET")
+                .or_else(|_| std::env::var("THOTH_PYLOS_SECRET"))
+                .unwrap_or_default();
         }
         if config.mqtt.password.is_empty() {
             config.mqtt.password = std::env::var("MQTT_PASSWORD").unwrap_or_default();
@@ -369,13 +372,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pylos_default() {
-        let cfg = PylosConfig::default();
+    fn test_groq_default() {
+        let cfg = GroqConfig::default();
         assert_eq!(cfg.endpoint, "https://api.groq.com/openai");
         assert_eq!(cfg.model, "llama-3.1-8b-instant");
         assert_eq!(cfg.fallback_model, Some("llama-3.3-70b-versatile".into()));
         assert_eq!(cfg.timeout_secs, 120);
-        let env_val = std::env::var("THOTH_PYLOS_SECRET").unwrap_or_default();
+        let env_val = std::env::var("THOTH_GROQ_SECRET").unwrap_or_default();
         assert_eq!(cfg.secret, env_val);
     }
 
@@ -395,7 +398,7 @@ mod tests {
     fn test_config_default() {
         let cfg = Config::default();
         let sys = system_language();
-        assert_eq!(cfg.pylos.model, "llama-3.1-8b-instant");
+        assert_eq!(cfg.groq.model, "llama-3.1-8b-instant");
         assert_eq!(cfg.behavior.target_language, sys);
     }
 

@@ -9,13 +9,13 @@ use crate::hotkey::HotkeyAction;
 use crate::metrics::UsageMetrics;
 use crate::mqtt::MqttPublisher;
 use crate::notification;
-use crate::pylos_client::{PylosClient, is_sensitive};
+use crate::groq_client::{GroqClient, is_sensitive};
 use crate::s3_storage::S3Storage;
 
 pub struct Orchestrator {
     hotkey_rx: mpsc::Receiver<HotkeyAction>,
     clipboard: ClipboardManager,
-    pylos: PylosClient,
+    groq: GroqClient,
     metrics: UsageMetrics,
     restore_clipboard: bool,
     default_target_language: String,
@@ -26,12 +26,12 @@ impl Orchestrator {
     pub fn new(hotkey_rx: mpsc::Receiver<HotkeyAction>, config: Config) -> Result<Self> {
         let clipboard = ClipboardManager::new()?;
         let target_language = config.behavior.validated_language().to_string();
-        let pylos = PylosClient::new(config.pylos.clone(), target_language.clone());
+        let groq = GroqClient::new(config.groq.clone(), target_language.clone());
         let metrics = UsageMetrics::load();
         Ok(Self {
             hotkey_rx,
             clipboard,
-            pylos,
+            groq,
             metrics,
             restore_clipboard: config.behavior.restore_clipboard,
             default_target_language: target_language,
@@ -40,15 +40,15 @@ impl Orchestrator {
     }
 
     pub async fn test_connection(&self) -> Result<()> {
-        self.pylos.test_connection().await
+        self.groq.test_connection().await
     }
 
     pub async fn test_translate(&self, text: &str) -> Result<String> {
-        self.pylos.translate(text).await
+        self.groq.translate(text).await
     }
 
     pub fn endpoint(&self) -> &str {
-        self.pylos.endpoint()
+        self.groq.endpoint()
     }
 
     async fn handle_screenshot_analysis(&mut self) -> Result<String> {
@@ -80,11 +80,11 @@ impl Orchestrator {
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(
-                self.config.pylos.timeout_secs,
+                self.config.groq.timeout_secs,
             ))
             .build()?;
 
-        let mut endpoint = self.config.pylos.endpoint.clone();
+        let mut endpoint = self.config.groq.endpoint.clone();
         while endpoint.ends_with('/') {
             endpoint.pop();
         }
@@ -92,7 +92,7 @@ impl Orchestrator {
         let vision = crate::vision::VisionAnalyzer::new(
             client,
             endpoint,
-            self.config.pylos.secret.clone(),
+            self.config.groq.secret.clone(),
             self.config.vision.clone(),
         );
 
@@ -148,7 +148,7 @@ impl Orchestrator {
         }
         tracing::info!("text fallback: captured {} chars", original_text.len());
         let prompt = format!("{}\n\n{}", self.config.vision.system_prompt, original_text);
-        self.pylos.execute_instruction(&prompt).await
+        self.groq.execute_instruction(&prompt).await
     }
 
     pub async fn run(&mut self) {
@@ -245,10 +245,10 @@ impl Orchestrator {
                         "Instruction : {}\n\nTexte à traiter :\n{}",
                         instruction, original_text
                     );
-                    match self.pylos.execute_instruction(&prompt).await {
+                    match self.groq.execute_instruction(&prompt).await {
                         Ok(t) => t,
                         Err(e) => {
-                            tracing::error!("pylos request failed: {e}");
+                            tracing::error!("groq request failed: {e}");
                             self.metrics.record_error();
                             self.metrics.save();
                             notification::notify_error(
@@ -274,7 +274,7 @@ impl Orchestrator {
                         }
                     );
 
-                    match self.pylos.reformulate(&original_text).await {
+                    match self.groq.reformulate(&original_text).await {
                         Ok(t) => {
                             tracing::info!(
                                 "orchestrator: reformulation successful (len: {}, hash: {:x})",
@@ -290,7 +290,7 @@ impl Orchestrator {
                             t
                         }
                         Err(e) => {
-                            tracing::error!("pylos request failed on reformulate: {e}");
+                            tracing::error!("groq request failed on reformulate: {e}");
                             self.metrics.record_error();
                             self.metrics.save();
                             notification::notify_error(
@@ -323,7 +323,7 @@ impl Orchestrator {
                         }
                     );
 
-                    match self.pylos.translate_to(&original_text, target_lang).await {
+                    match self.groq.translate_to(&original_text, target_lang).await {
                         Ok(t) => {
                             tracing::info!(
                                 "orchestrator: translation successful (len: {}, hash: {:x})",
@@ -339,7 +339,7 @@ impl Orchestrator {
                             t
                         }
                         Err(e) => {
-                            tracing::error!("pylos request failed: {e}");
+                            tracing::error!("groq request failed: {e}");
                             self.metrics.record_error();
                             self.metrics.save();
                             notification::notify_error(
@@ -380,7 +380,7 @@ impl Orchestrator {
             self.metrics.record_success(
                 original_text.len() as u64,
                 latency,
-                &self.pylos.model_name(),
+                &self.groq.model_name(),
             );
             self.metrics.save();
             notification::notify_success();

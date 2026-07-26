@@ -5,7 +5,7 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::config::PylosConfig;
+use crate::config::GroqConfig;
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -175,14 +175,14 @@ pub fn clean_response(text: &str) -> String {
     cleaned
 }
 
-pub struct PylosClient {
+pub struct GroqClient {
     client: Client,
-    config: PylosConfig,
+    config: GroqConfig,
     target_language: String,
 }
 
-impl PylosClient {
-    pub fn new(mut config: PylosConfig, target_language: String) -> Self {
+impl GroqClient {
+    pub fn new(mut config: GroqConfig, target_language: String) -> Self {
         while config.endpoint.ends_with('/') {
             config.endpoint.pop();
         }
@@ -260,7 +260,6 @@ impl PylosClient {
         let response = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
-            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -293,7 +292,6 @@ impl PylosClient {
         let _ = self
             .client
             .get(&url)
-            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .send()
             .await?
@@ -329,7 +327,6 @@ impl PylosClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
-            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -422,7 +419,6 @@ impl PylosClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
-            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -512,7 +508,6 @@ impl PylosClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
-            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -591,26 +586,26 @@ mod tests {
 
     #[test]
     fn test_endpoint_sanitization() {
-        let cfg = PylosConfig {
-            endpoint: "https://pylos.p.zacharie.org/v1/".into(),
+        let cfg = GroqConfig {
+            endpoint: "https://api.groq.com/openai/v1/".into(),
             ..Default::default()
         };
-        let client = PylosClient::new(cfg, "fr".into());
-        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+        let client = GroqClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://api.groq.com/openai");
 
-        let cfg = PylosConfig {
-            endpoint: "https://pylos.p.zacharie.org/v1".into(),
+        let cfg = GroqConfig {
+            endpoint: "https://api.groq.com/openai/v1".into(),
             ..Default::default()
         };
-        let client = PylosClient::new(cfg, "fr".into());
-        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+        let client = GroqClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://api.groq.com/openai");
 
-        let cfg = PylosConfig {
-            endpoint: "https://pylos.p.zacharie.org/".into(),
+        let cfg = GroqConfig {
+            endpoint: "https://api.groq.com/openai/".into(),
             ..Default::default()
         };
-        let client = PylosClient::new(cfg, "fr".into());
-        assert_eq!(client.config.endpoint, "https://pylos.p.zacharie.org");
+        let client = GroqClient::new(cfg, "fr".into());
+        assert_eq!(client.config.endpoint, "https://api.groq.com/openai");
     }
 
     #[test]

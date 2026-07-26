@@ -246,10 +246,10 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     }
 
     let mut config = config;
-    if config.pylos.secret.is_empty() {
-        config.pylos.secret = uuid_v4();
+    if config.groq.secret.is_empty() {
+        config.groq.secret = uuid_v4();
         config.save()?;
-        tracing::info!("generated new X-Thoth-Secret");
+        tracing::info!("generated new Groq API secret");
     }
 
     let enabled = Arc::new(AtomicBool::new(true));
@@ -273,15 +273,15 @@ async fn main_inner(log_file: PathBuf) -> anyhow::Result<()> {
     let mut orchestrator = Orchestrator::new(hotkey_rx, config.clone())?;
 
     tracing::info!(
-        "Testing connection to Ollama/Pylos endpoint at {}...",
+        "Testing connection to Groq endpoint at {}...",
         orchestrator.endpoint()
     );
     match orchestrator.test_connection().await {
         Ok(_) => {
-            tracing::info!("Connection to Ollama/Pylos endpoint is OK");
+            tracing::info!("Connection to Groq endpoint is OK");
 
             // Effectue un test de traduction au démarrage
-            let test_model = config.pylos.model.clone();
+            let test_model = config.groq.model.clone();
             tracing::info!("Testing translation with model '{}'...", test_model);
             match orchestrator.test_translate("Hello world").await {
                 Ok(translated) => {

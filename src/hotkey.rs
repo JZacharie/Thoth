@@ -507,80 +507,179 @@ mod platform_macos {
 #[cfg(target_os = "linux")]
 mod platform_linux {
     use anyhow::Result;
-    use rdev::{EventType, Key, listen};
+    use evdev::{Device, EventType, KeyCode};
     use std::collections::HashSet;
+    use std::os::fd::AsRawFd;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
 
     use super::{HotkeyAction, HotkeyConfig, HotkeyKey, HotkeyPattern, Modifier, match_pattern};
 
-    fn modifier_from_key(key: &Key) -> Option<&'static str> {
+    /// Map evdev key codes to modifier names used by match_pattern.
+    fn modifier_from_evdev(key: KeyCode) -> Option<&'static str> {
         match key {
-            Key::ControlLeft | Key::ControlRight => Some("ctrl"),
-            Key::Alt | Key::AltGr => Some("alt"),
-            Key::ShiftLeft | Key::ShiftRight => Some("shift"),
-            Key::MetaLeft
-            | Key::MetaRight
-            | Key::Unknown(125)
-            | Key::Unknown(126)
-            | Key::Unknown(133)
-            | Key::Unknown(134) => Some("win"),
+            KeyCode::KEY_LEFTCTRL | KeyCode::KEY_RIGHTCTRL => Some("ctrl"),
+            KeyCode::KEY_LEFTALT | KeyCode::KEY_RIGHTALT => Some("alt"),
+            KeyCode::KEY_LEFTSHIFT | KeyCode::KEY_RIGHTSHIFT => Some("shift"),
+            KeyCode::KEY_LEFTMETA | KeyCode::KEY_RIGHTMETA => Some("win"),
             _ => None,
         }
     }
 
-    fn key_to_str(key: &Key) -> Option<&'static str> {
+    /// Map evdev key codes to the key strings used by match_pattern.
+    fn evdev_key_to_str(key: KeyCode) -> Option<&'static str> {
         match key {
-            Key::KeyA => Some("a"),
-            Key::KeyB => Some("b"),
-            Key::KeyC => Some("c"),
-            Key::KeyD => Some("d"),
-            Key::KeyE => Some("e"),
-            Key::KeyF => Some("f"),
-            Key::KeyG => Some("g"),
-            Key::KeyH => Some("h"),
-            Key::KeyI => Some("i"),
-            Key::KeyJ => Some("j"),
-            Key::KeyK => Some("k"),
-            Key::KeyL => Some("l"),
-            Key::KeyM => Some("m"),
-            Key::KeyN => Some("n"),
-            Key::KeyO => Some("o"),
-            Key::KeyP => Some("p"),
-            Key::KeyQ => Some("q"),
-            Key::KeyR => Some("r"),
-            Key::KeyS => Some("s"),
-            Key::KeyT => Some("t"),
-            Key::KeyU => Some("u"),
-            Key::KeyV => Some("v"),
-            Key::KeyW => Some("w"),
-            Key::KeyX => Some("x"),
-            Key::KeyY => Some("y"),
-            Key::KeyZ => Some("z"),
-            Key::Num0 => Some("0"),
-            Key::Num1 => Some("1"),
-            Key::Num2 => Some("2"),
-            Key::Num3 => Some("3"),
-            Key::Num4 => Some("4"),
-            Key::Num5 => Some("5"),
-            Key::Num6 => Some("6"),
-            Key::Num7 => Some("7"),
-            Key::Num8 => Some("8"),
-            Key::Num9 => Some("9"),
-            Key::Comma => Some(","),
-            Key::SemiColon => Some(";"),
+            KeyCode::KEY_A => Some("a"),
+            KeyCode::KEY_B => Some("b"),
+            KeyCode::KEY_C => Some("c"),
+            KeyCode::KEY_D => Some("d"),
+            KeyCode::KEY_E => Some("e"),
+            KeyCode::KEY_F => Some("f"),
+            KeyCode::KEY_G => Some("g"),
+            KeyCode::KEY_H => Some("h"),
+            KeyCode::KEY_I => Some("i"),
+            KeyCode::KEY_J => Some("j"),
+            KeyCode::KEY_K => Some("k"),
+            KeyCode::KEY_L => Some("l"),
+            KeyCode::KEY_M => Some("m"),
+            KeyCode::KEY_N => Some("n"),
+            KeyCode::KEY_O => Some("o"),
+            KeyCode::KEY_P => Some("p"),
+            KeyCode::KEY_Q => Some("q"),
+            KeyCode::KEY_R => Some("r"),
+            KeyCode::KEY_S => Some("s"),
+            KeyCode::KEY_T => Some("t"),
+            KeyCode::KEY_U => Some("u"),
+            KeyCode::KEY_V => Some("v"),
+            KeyCode::KEY_W => Some("w"),
+            KeyCode::KEY_X => Some("x"),
+            KeyCode::KEY_Y => Some("y"),
+            KeyCode::KEY_Z => Some("z"),
+            KeyCode::KEY_0 => Some("0"),
+            KeyCode::KEY_1 => Some("1"),
+            KeyCode::KEY_2 => Some("2"),
+            KeyCode::KEY_3 => Some("3"),
+            KeyCode::KEY_4 => Some("4"),
+            KeyCode::KEY_5 => Some("5"),
+            KeyCode::KEY_6 => Some("6"),
+            KeyCode::KEY_7 => Some("7"),
+            KeyCode::KEY_8 => Some("8"),
+            KeyCode::KEY_9 => Some("9"),
+            KeyCode::KEY_COMMA => Some(","),
+            KeyCode::KEY_SEMICOLON => Some(";"),
+            KeyCode::KEY_SPACE => Some("space"),
+            KeyCode::KEY_F1 => Some("f1"),
+            KeyCode::KEY_F2 => Some("f2"),
+            KeyCode::KEY_F3 => Some("f3"),
+            KeyCode::KEY_F4 => Some("f4"),
+            KeyCode::KEY_F5 => Some("f5"),
+            KeyCode::KEY_F6 => Some("f6"),
+            KeyCode::KEY_F7 => Some("f7"),
+            KeyCode::KEY_F8 => Some("f8"),
+            KeyCode::KEY_F9 => Some("f9"),
+            KeyCode::KEY_F10 => Some("f10"),
+            KeyCode::KEY_F11 => Some("f11"),
+            KeyCode::KEY_F12 => Some("f12"),
+            KeyCode::KEY_DOT => Some("."),
+            KeyCode::KEY_SLASH => Some("/"),
             _ => None,
         }
     }
 
-    fn check_input_permissions() {
-        let dev_input = std::path::Path::new("/dev/input/event0");
-        if dev_input.exists() && std::fs::File::open(dev_input).is_err() {
+    /// Format a HotkeyPattern for human-readable logging.
+    fn fmt_pattern(pat: &HotkeyPattern) -> String {
+        let mods: Vec<String> = pat.modifiers.iter().map(|m| format!("{m:?}")).collect();
+        format!("{}+{:?}", mods.join("+"), pat.key)
+    }
+
+    /// Discover all keyboard devices in /dev/input/event*.
+    fn find_keyboards() -> Vec<Device> {
+        let mut keyboards = Vec::new();
+        for (_path, device) in evdev::enumerate() {
+            // A keyboard device supports EV_KEY and has at least KEY_A
+            if let Some(keys) = device.supported_keys()
+                && keys.contains(KeyCode::KEY_A)
+            {
+                let name = device.name().unwrap_or("unnamed");
+                tracing::info!("evdev: found keyboard device: '{}'", name);
+                keyboards.push(device);
+            }
+        }
+        if keyboards.is_empty() {
+            tracing::error!(
+                "evdev: no keyboard devices found in /dev/input/. \
+                 Ensure your user is in the 'input' group (sudo usermod -aG input $USER && relogin) \
+                 or run with sudo."
+            );
+        }
+        keyboards
+    }
+
+    fn check_and_dispatch(
+        pressed: &HashSet<String>,
+        hotkey_config: &HotkeyConfig,
+        tx: &mpsc::Sender<HotkeyAction>,
+    ) {
+        let mut action = None;
+        if match_pattern(pressed, &hotkey_config.translate_system) {
+            action = Some(HotkeyAction::TranslateDefault);
+        } else if match_pattern(pressed, &hotkey_config.translate_english) {
+            action = Some(HotkeyAction::TranslateEnglish);
+        } else if match_pattern(pressed, &hotkey_config.execute_instruction) {
+            action = Some(HotkeyAction::ExecuteInstruction);
+        } else if match_pattern(
+            pressed,
+            &HotkeyPattern {
+                modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                key: HotkeyKey::Letter('r'),
+            },
+        ) {
+            action = Some(HotkeyAction::Reformulate);
+        } else if match_pattern(
+            pressed,
+            &HotkeyPattern {
+                modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
+                key: HotkeyKey::Letter('p'),
+            },
+        ) {
+            action = Some(HotkeyAction::ScreenshotAnalysis);
+        } else {
+            for (pat, inst) in &hotkey_config.custom_instructions {
+                if match_pattern(pressed, pat) {
+                    action = Some(HotkeyAction::Custom(inst.clone()));
+                    break;
+                }
+            }
+        }
+
+        if let Some(action) = action {
+            tracing::info!("evdev: hotkey matched: {:?}", action);
+            if tx.try_send(action).is_err() {
+                tracing::warn!("hotkey channel full, dropping event");
+            }
+        } else {
+            let expected: Vec<String> =
+                std::iter::once(fmt_pattern(&hotkey_config.translate_system))
+                    .chain(std::iter::once(fmt_pattern(
+                        &hotkey_config.translate_english,
+                    )))
+                    .chain(std::iter::once(fmt_pattern(
+                        &hotkey_config.execute_instruction,
+                    )))
+                    .chain(std::iter::once("Ctrl+Shift+Win+R".to_string()))
+                    .chain(std::iter::once("Ctrl+Shift+Win+P".to_string()))
+                    .chain(
+                        hotkey_config
+                            .custom_instructions
+                            .iter()
+                            .map(|(pat, _)| fmt_pattern(pat)),
+                    )
+                    .collect();
             tracing::warn!(
-                "Cannot read /dev/input/event* — are you in the 'input' group? \
-                 Global hotkeys will NOT work on Wayland without it. \
-                 Run: sudo usermod -aG input $USER && relogin"
+                "evdev: no hotkey matched (pressed: {:?}, expected patterns: {})",
+                pressed,
+                expected.join(", "),
             );
         }
     }
@@ -590,106 +689,164 @@ mod platform_linux {
         hotkey_config: HotkeyConfig,
         enabled: Arc<AtomicBool>,
     ) -> Result<()> {
-        check_input_permissions();
+        let mut keyboards = find_keyboards();
+        if keyboards.is_empty() {
+            tracing::warn!("evdev: no keyboards found, hotkey listener disabled");
+            return Ok(());
+        }
+
+        // Set all devices to non-blocking mode
+        for dev in &keyboards {
+            dev.set_nonblocking(true)
+                .unwrap_or_else(|e| tracing::warn!("evdev: failed to set nonblocking: {e}"));
+        }
 
         let pressed: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-        let tx_clone = tx.clone();
-        let enabled_clone = enabled.clone();
 
         std::thread::spawn(move || {
-            if let Err(e) = listen(move |event| {
-                if !enabled_clone.load(Ordering::Relaxed) {
-                    return;
-                }
-                match event.event_type {
-                    EventType::KeyPress(key) => {
-                        if let Some(mod_name) = modifier_from_key(&key) {
-                            pressed.lock().unwrap().insert(mod_name.to_string());
-                        }
-                        let mut p = pressed.lock().unwrap();
-                        if let Some(key_name) = key_to_str(&key) {
-                            p.insert(key_name.to_string());
-                        }
-                        if let Some(ref name) = event.name {
-                            p.insert(name.to_lowercase());
-                        }
-                        tracing::trace!(
-                            "KeyPress: {:?}, event.name: {:?}, pressed keys: {:?}",
-                            key,
-                            event.name,
-                            *p
-                        );
-                    }
-                    EventType::KeyRelease(key) => {
-                        if let Some(mod_name) = modifier_from_key(&key) {
-                            pressed.lock().unwrap().remove(mod_name);
-                        }
-                        let mut keys_to_remove: Vec<String> = Vec::new();
-                        if let Some(key_name) = key_to_str(&key) {
-                            keys_to_remove.push(key_name.to_string());
-                        }
-                        if let Some(ref name) = event.name {
-                            keys_to_remove.push(name.to_lowercase());
-                        }
+            // Build poll fds
+            let mut pollfds: Vec<libc::pollfd> = keyboards
+                .iter()
+                .map(|dev| libc::pollfd {
+                    fd: dev.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                })
+                .collect();
 
-                        if !keys_to_remove.is_empty() {
-                            let mut p = pressed.lock().unwrap();
-                            tracing::trace!(
-                                "KeyRelease: {:?}, event.name: {:?}, keys_to_remove: {:?}, pressed keys before match: {:?}",
-                                key,
-                                event.name,
-                                keys_to_remove,
-                                *p
-                            );
-                            let mut action = None;
-                            if match_pattern(&p, &hotkey_config.translate_system) {
-                                action = Some(HotkeyAction::TranslateDefault);
-                            } else if match_pattern(&p, &hotkey_config.translate_english) {
-                                action = Some(HotkeyAction::TranslateEnglish);
-                            } else if match_pattern(&p, &hotkey_config.execute_instruction) {
-                                action = Some(HotkeyAction::ExecuteInstruction);
-                            } else if match_pattern(
-                                &p,
-                                &HotkeyPattern {
-                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
-                                    key: HotkeyKey::Letter('r'),
-                                },
-                            ) {
-                                action = Some(HotkeyAction::Reformulate);
-                            } else if match_pattern(
-                                &p,
-                                &HotkeyPattern {
-                                    modifiers: vec![Modifier::Ctrl, Modifier::Shift, Modifier::Win],
-                                    key: HotkeyKey::Letter('p'),
-                                },
-                            ) {
-                                action = Some(HotkeyAction::ScreenshotAnalysis);
-                            } else {
-                                for (pat, inst) in &hotkey_config.custom_instructions {
-                                    if match_pattern(&p, pat) {
-                                        action = Some(HotkeyAction::Custom(inst.clone()));
-                                        break;
+            tracing::info!(
+                "evdev: hotkey listener started, monitoring {} keyboard(s)",
+                keyboards.len()
+            );
+
+            tracing::info!(
+                "evdev: registered hotkeys: \
+                 TranslateDefault={}, \
+                 TranslateEnglish={}, \
+                 ExecuteInstruction={}, \
+                 Reformulate=Ctrl+Shift+Win+R, \
+                 ScreenshotAnalysis=Ctrl+Shift+Win+P, \
+                 custom={} instruction(s)",
+                fmt_pattern(&hotkey_config.translate_system),
+                fmt_pattern(&hotkey_config.translate_english),
+                fmt_pattern(&hotkey_config.execute_instruction),
+                hotkey_config.custom_instructions.len(),
+            );
+
+            for (i, (pat, inst)) in hotkey_config.custom_instructions.iter().enumerate() {
+                tracing::info!(
+                    "evdev: custom hotkey #{}: {} → '{}'",
+                    i,
+                    fmt_pattern(pat),
+                    inst
+                );
+            }
+
+            loop {
+                // Reset revents before polling
+                for pfd in &mut pollfds {
+                    pfd.revents = 0;
+                }
+
+                // Poll all keyboard fds with 200ms timeout
+                let ret =
+                    unsafe { libc::poll(pollfds.as_mut_ptr(), pollfds.len() as libc::nfds_t, 200) };
+                if ret < 0 {
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    tracing::error!("evdev: poll error: {err}");
+                    break;
+                }
+                if ret == 0 {
+                    // Timeout, just loop again
+                    continue;
+                }
+
+                for (i, pfd) in pollfds.iter().enumerate() {
+                    if pfd.revents & libc::POLLIN == 0 {
+                        continue;
+                    }
+
+                    // Read events from this device
+                    if let Ok(events) = keyboards[i].fetch_events() {
+                        for ev in events {
+                            // Only process key events
+                            if ev.event_type() != EventType::KEY {
+                                continue;
+                            }
+
+                            let key = KeyCode(ev.code());
+                            let value = ev.value();
+                            // value: 0 = release, 1 = press, 2 = repeat
+
+                            if !enabled.load(Ordering::Relaxed) {
+                                continue;
+                            }
+
+                            match value {
+                                1 => {
+                                    // Key press
+                                    let mut p = pressed.lock().unwrap();
+                                    if let Some(mod_name) = modifier_from_evdev(key) {
+                                        p.insert(mod_name.to_string());
+                                    }
+                                    match evdev_key_to_str(key) {
+                                        Some(key_name) => {
+                                            p.insert(key_name.to_string());
+                                        }
+                                        None => {
+                                            tracing::debug!(
+                                                "evdev: unmapped key {:?} (not in evdev_key_to_str)",
+                                                key
+                                            );
+                                        }
+                                    }
+                                    tracing::debug!(
+                                        "evdev KeyPress: {:?}, pressed keys: {:?}",
+                                        key,
+                                        *p
+                                    );
+                                }
+                                0 => {
+                                    // Key release — check patterns before removing
+                                    let mut keys_to_remove: Vec<String> = Vec::new();
+                                    if let Some(key_name) = evdev_key_to_str(key) {
+                                        keys_to_remove.push(key_name.to_string());
+                                    }
+
+                                    if keys_to_remove.is_empty() {
+                                        tracing::debug!(
+                                            "evdev KeyRelease (unmapped): {:?}, not in evdev_key_to_str",
+                                            key,
+                                        );
+                                    } else {
+                                        let mut p = pressed.lock().unwrap();
+                                        tracing::debug!(
+                                            "evdev KeyRelease: {:?}, pressed keys before match: {:?}",
+                                            key,
+                                            *p
+                                        );
+                                        check_and_dispatch(&p, &hotkey_config, &tx);
+
+                                        for k in &keys_to_remove {
+                                            p.remove(k);
+                                        }
+                                    }
+
+                                    // Remove modifier on release
+                                    if let Some(mod_name) = modifier_from_evdev(key) {
+                                        pressed.lock().unwrap().remove(mod_name);
                                     }
                                 }
-                            }
-
-                            for k in &keys_to_remove {
-                                p.remove(k);
-                            }
-
-                            if let Some(action) = action
-                                && tx_clone.try_send(action).is_err()
-                            {
-                                tracing::warn!("hotkey channel full, dropping event");
+                                _ => {
+                                    // value 2 = key repeat, ignore
+                                }
                             }
                         }
                     }
-                    _ => {}
                 }
-            }) {
-                tracing::error!(
-                    "rdev listen failed: {e:?}. On Wayland, ensure your user is in the 'input' group (sudo usermod -aG input $USER && relogin). On X11, install libxrecord-dev."
-                );
             }
         });
         Ok(())
