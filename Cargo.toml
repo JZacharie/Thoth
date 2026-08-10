@@ -27,7 +27,7 @@ libc = "0.2"
 keyring = { version = "4" }
 xcap = "0.9"
 rumqttc = { version = "0.25", default-features = false, features = ["websocket", "use-rustls"] }
-base64 = "0.22"
+base64 = "0.23"
 dotenvy = "0.15"
 uuid = { version = "1", features = ["v4"] }
 rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls", "with-tokio"] }
