@@ -72,7 +72,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.5
         with:
           tool: cargo-nextest
 
@@ -82,7 +82,7 @@ jobs:
       # cargo-deny uniquement sur main + tags (pas sur les PRs)
       - name: Install cargo-deny
         if: github.event_name == 'push'
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.5
         with:
           tool: cargo-deny
 
