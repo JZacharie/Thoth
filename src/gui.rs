@@ -3,8 +3,8 @@ use eframe::egui::{Color32, CornerRadius, FontId, Stroke, Vec2};
 
 use crate::clipboard::ClipboardManager;
 use crate::config::Config;
-use crate::metrics::UsageMetrics;
 use crate::groq_client::GroqClient;
+use crate::metrics::UsageMetrics;
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 // Based on the README screenshots: deep navy background, slightly lighter cards,

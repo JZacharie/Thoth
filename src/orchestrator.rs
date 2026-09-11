@@ -5,11 +5,11 @@ use tokio::sync::mpsc;
 
 use crate::clipboard::ClipboardManager;
 use crate::config::Config;
+use crate::groq_client::{GroqClient, is_sensitive};
 use crate::hotkey::HotkeyAction;
 use crate::metrics::UsageMetrics;
 use crate::mqtt::MqttPublisher;
 use crate::notification;
-use crate::groq_client::{GroqClient, is_sensitive};
 use crate::s3_storage::S3Storage;
 
 pub struct Orchestrator {
