@@ -60,7 +60,7 @@ jobs:
           components: clippy
 
       - name: sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache Cargo (registry + target)
         uses: Swatinem/rust-cache@v2
@@ -131,7 +131,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
