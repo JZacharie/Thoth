@@ -19,6 +19,12 @@ pub use config::{BehaviorConfig, Config, GroqConfig, validate_language};
 pub use groq_client::{GroqClient, is_sensitive};
 pub use hotkey::{HotkeyKey, HotkeyPattern, Modifier};
 
+pub type PylosConfig = GroqConfig;
+pub type PylosClient = GroqClient;
+pub mod pylos_client {
+    pub use crate::groq_client::*;
+}
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static INSECURE: AtomicBool = AtomicBool::new(false);

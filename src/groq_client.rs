@@ -260,6 +260,7 @@ impl GroqClient {
         let response = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -292,6 +293,7 @@ impl GroqClient {
         let _ = self
             .client
             .get(&url)
+            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .send()
             .await?
@@ -327,6 +329,7 @@ impl GroqClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -419,6 +422,7 @@ impl GroqClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()
@@ -508,6 +512,7 @@ impl GroqClient {
         let result = self
             .client
             .post(format!("{}/v1/chat/completions", self.config.endpoint))
+            .header("X-Thoth-Secret", &self.config.secret)
             .header("Authorization", format!("Bearer {}", self.config.secret))
             .json(&request)
             .send()

@@ -331,7 +331,7 @@ system_prompt = "Test prompt"
 "#;
 
     let config: thoth::Config = toml::from_str(toml_str).unwrap();
-    assert_eq!(config.pylos.endpoint, "https://test.example.com");
+    assert_eq!(config.groq.endpoint, "https://test.example.com");
     assert_eq!(config.mqtt.broker, "test-broker.example.com");
     assert_eq!(config.s3.bucket, "test-bucket");
     assert_eq!(config.vision.model, "test-vision-model");
