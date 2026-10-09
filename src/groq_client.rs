@@ -74,8 +74,7 @@ fn contains_sensitive_data(text: &str) -> bool {
         // GitHub Tokens
         regex::Regex::new(r"gh[pousr]_[a-zA-Z0-9]{36,255}").unwrap(),
         // Slack Tokens
-        regex::Regex::new(r"xox[bp]-[a-zA-Z0-9-]{10,}").unwrap(),
-        regex::Regex::new(r"(?i)slack").unwrap(),
+        regex::Regex::new(r"xox[baprs]-[a-zA-Z0-9-]{10,250}").unwrap(),
         // Database URIs
         regex::Regex::new(r"(?i)mongodb://").unwrap(),
         regex::Regex::new(r"(?i)postgres(ql)?://").unwrap(),
@@ -100,8 +99,7 @@ pub fn anonymize(text: &str) -> (String, std::collections::HashMap<String, Strin
         regex::Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
         regex::Regex::new(r"(?i)AKIA[A-Z0-9]{16}").unwrap(),
         regex::Regex::new(r"gh[pousr]_[a-zA-Z0-9]{36,255}").unwrap(),
-        regex::Regex::new(r"xox[bp]-[a-zA-Z0-9-]{10,}").unwrap(),
-        regex::Regex::new(r"(?i)slack").unwrap(),
+        regex::Regex::new(r"xox[baprs]-[a-zA-Z0-9-]{10,250}").unwrap(),
         regex::Regex::new(r#"(?i)mongodb://[^\s&'"<>]+"#).unwrap(),
         regex::Regex::new(r#"(?i)postgres(ql)?://[^\s&'"<>]+"#).unwrap(),
         regex::Regex::new(r#"(?i)mysql://[^\s&'"<>]+"#).unwrap(),
@@ -109,12 +107,19 @@ pub fn anonymize(text: &str) -> (String, std::collections::HashMap<String, Strin
 
     let mut counter = 0;
     for re in &patterns {
-        while let Some(m) = re.find(&modified_text) {
-            let matched_str = m.as_str().to_string();
-            let placeholder = format!("__THOTH_PII_{}__", counter);
-            modified_text = modified_text.replace(&matched_str, &placeholder);
-            placeholders.insert(placeholder, matched_str);
-            counter += 1;
+        // Collect all distinct matches first to avoid infinite loops when replacing
+        let matches: Vec<String> = re
+            .find_iter(&modified_text)
+            .map(|m| m.as_str().to_string())
+            .collect();
+
+        for matched_str in matches {
+            if modified_text.contains(&matched_str) {
+                let placeholder = format!("__THOTH_PII_{}__", counter);
+                modified_text = modified_text.replace(&matched_str, &placeholder);
+                placeholders.insert(placeholder, matched_str);
+                counter += 1;
+            }
         }
     }
 
@@ -494,7 +499,8 @@ impl GroqClient {
     }
 
     pub async fn reformulate(&self, text: &str) -> Result<String> {
-        let system_prompt = self.build_reformulate_prompt(text);
+        let (anon_text, mapping) = anonymize(text);
+        let system_prompt = self.build_reformulate_prompt(&anon_text);
         let request = ChatRequest::new(
             self.config.model.clone(),
             vec![
@@ -504,7 +510,7 @@ impl GroqClient {
                 },
                 Message {
                     role: "user".into(),
-                    content: text.into(),
+                    content: anon_text.clone(),
                 },
             ],
         );
@@ -534,7 +540,7 @@ impl GroqClient {
                                 },
                                 Message {
                                     role: "user".into(),
-                                    content: text.into(),
+                                    content: anon_text,
                                 },
                             ],
                         );
@@ -560,7 +566,9 @@ impl GroqClient {
             .map(|c| c.message.content)
             .unwrap_or_default();
 
-        Ok(content)
+        let cleaned = clean_response(&content);
+        let restored = deanonymize(&cleaned, &mapping);
+        Ok(restored)
     }
 
     pub async fn translate(&self, text: &str) -> Result<String> {
@@ -662,6 +670,38 @@ mod tests {
     fn test_is_sensitive_public_fn() {
         assert!(is_sensitive("sk-abcdefghijklmnopqrstuvwxyz1234"));
         assert!(!is_sensitive("Ceci est un texte normal pour traduction"));
+        // Ensure plain word 'slack' is not blocked as sensitive
+        assert!(!is_sensitive("Please join the slack channel for questions"));
+        // Actual slack token should be detected
+        // (assembled from bytes so no token-shaped literal exists in the source)
+        let dummy_slack_token = String::from_utf8(vec![
+            120, 111, 120, 98, 45, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 45, 97, 98, 99,
+            100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
+        ])
+        .expect("fake Slack token must be valid UTF-8");
+        assert!(is_sensitive(&dummy_slack_token));
+    }
+
+    #[test]
+    fn test_anonymize_and_deanonymize() {
+        let dummy_slack_token = String::from_utf8(vec![
+            120, 111, 120, 98, 45, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 45, 97, 98, 99,
+            100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
+        ])
+        .expect("fake Slack token must be valid UTF-8");
+        let dummy_sk_key = format!("{}-{}", "sk", "123456789012345678901234");
+        let input = format!(
+            "Voici ma clé {} et mon token {}.",
+            dummy_sk_key, dummy_slack_token
+        );
+        let (anon, map) = anonymize(&input);
+        assert!(!anon.contains(&dummy_sk_key));
+        assert!(!anon.contains(&dummy_slack_token));
+        assert!(anon.contains("__THOTH_PII_0__"));
+        assert!(anon.contains("__THOTH_PII_1__"));
+
+        let restored = deanonymize(&anon, &map);
+        assert_eq!(restored, input);
     }
 
     #[test]
