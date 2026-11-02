@@ -30,7 +30,7 @@ rumqttc = { version = "0.25", default-features = false, features = ["websocket",
 base64 = "0.23"
 dotenvy = "0.15"
 uuid = { version = "1.26.1", features = ["v4"] }
-rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls", "with-tokio"] }
+rust-s3 = { version = "0.38", default-features = false, features = ["tokio-rustls-tls", "with-tokio"] }
 
 [package.metadata.cargo-udeps.ignore]
 development = []
