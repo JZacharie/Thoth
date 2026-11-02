@@ -59,7 +59,7 @@ windows-sys = { version = "0.61", features = [
 
 [target.'cfg(any(windows, target_os = "macos", target_os = "linux"))'.dependencies]
 rdev = "0.5"
-tray-icon = "0.24.2"
+tray-icon = "0.26.1"
 notify-rust = "4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
