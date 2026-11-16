@@ -21,7 +21,7 @@ time = "=0.3.55"
 sys-locale = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 eframe = { version = "0.35", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
-rfd = "0.17"
+rfd = "0.18"
 directories = "6"
 libc = "0.2.189"
 keyring = { version = "4.2.0" }
